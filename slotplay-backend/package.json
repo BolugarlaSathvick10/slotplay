@@ -1,0 +1,60 @@
+{
+  "name": "slotplay-backend",
+  "version": "1.0.0",
+  "description": "SlotPlay backend API — Express.js + Neon PostgreSQL",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "migrate": "ts-node src/config/db.ts migrate",
+    "migrate:undo": "ts-node src/config/db.ts migrate:undo",
+    "seed": "ts-node seeders/index.ts",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.2.0",
+    "connect-pg-simple": "^9.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.3.1",
+    "express-session": "^1.18.0",
+    "express-validator": "^7.1.0",
+    "helmet": "^7.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
+    "pg": "^8.12.0",
+    "pg-hstore": "^2.3.4",
+    "qrcode": "^1.5.3",
+    "resend": "^3.3.0",
+    "sequelize": "^6.37.3",
+    "sharp": "^0.33.4",
+    "winston": "^3.13.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.18.0",
+    "@types/morgan": "^1.9.9",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^20.14.9",
+    "@types/node-cron": "^3.0.11",
+    "@types/pg": "^8.11.6",
+    "@types/qrcode": "^1.5.5",
+    "@types/sequelize": "^4.28.20",
+    "@typescript-eslint/eslint-plugin": "^7.15.0",
+    "@typescript-eslint/parser": "^7.15.0",
+    "eslint": "^8.57.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.5.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
