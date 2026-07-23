@@ -30,9 +30,14 @@ export function useAuth() {
   // ── Hydrate from session cookie on mount ───────────────────────────────────
   // Called once per app load — checks /api/auth/me to restore session state
   const hydrate = useCallback(async () => {
-    setLoading(true);
-    const currentUser = await getCurrentUser();
-    setUser(currentUser);
+    try {
+      setLoading(true);
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+    } catch {
+      // Session check failed — treat as unauthenticated, never surface to overlay
+      setUser(null);
+    }
   }, [setUser, setLoading]);
 
   // ── Login ─────────────────────────────────────────────────────────────────

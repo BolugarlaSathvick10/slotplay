@@ -16,28 +16,6 @@ import { ReviewsSection } from '@/components/turf/ReviewsSection';
 import { AvailabilityCalendar } from '@/components/booking/AvailabilityCalendar';
 import { MapPin, Star, Phone, ChevronRight, Tag } from 'lucide-react';
 
-import type { Metadata } from 'next';
-
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/venues/${params.id}`, { next: { revalidate: 300 } });
-    if (!res.ok) return { title: 'Venue | SlotPlay' };
-    const { data } = await res.json();
-    const v = data;
-    return {
-      title: `${v.name} — Book Slots | SlotPlay`,
-      description: v.description || `Book slots at ${v.name} in ${v.city}. ₹${v.pricePerHour}/hour. Real-time availability on SlotPlay.`,
-      openGraph: {
-        title: `${v.name} | SlotPlay`,
-        description: `₹${v.pricePerHour}/hour · ${v.city} · Book now on SlotPlay`,
-        images: v.images?.[0]?.url ? [{ url: v.images[0].url, alt: v.name }] : undefined,
-      },
-    };
-  } catch {
-    return { title: 'Venue | SlotPlay' };
-  }
-}
-
 function TurfDetailContent({ id }: { id: string }) {
   const { data: venue, isLoading, error } = useVenueDetail(id);
 
@@ -68,7 +46,7 @@ function TurfDetailContent({ id }: { id: string }) {
   }
 
   const rating  = venue.averageRating ? parseFloat(venue.averageRating as string) : null;
-  const upiId   = venue.owner?.ownerProfile?.upiId;
+  const upiId   = (venue.owner as any)?.ownerProfile?.upiId;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -122,7 +100,7 @@ function TurfDetailContent({ id }: { id: string }) {
             </div>
 
             {/* Sport chips */}
-            {venue.sports?.length > 0 && (
+            {Array.isArray(venue.sports) && venue.sports.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4">
                 {venue.sports.map((s: any) => (
                   <span key={s.id} className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800 text-brand-700 dark:text-brand-400 text-xs font-bold">
@@ -160,7 +138,7 @@ function TurfDetailContent({ id }: { id: string }) {
           </section>
 
           {/* Amenities */}
-          {venue.amenities?.length > 0 && (
+          {Array.isArray(venue.amenities) && venue.amenities.length > 0 && (
             <section>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Amenities</h2>
               <AmenitiesList amenities={venue.amenities} />

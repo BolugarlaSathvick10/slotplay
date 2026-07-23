@@ -22,10 +22,12 @@ export interface VenueAttributes {
   latitude?: number | null;
   longitude?: number | null;
   pricePerHour: number;
+  phone?: string | null;
   status: VenueStatus;
   isVerified: boolean;
   avgRating: number;
   totalReviews: number;
+  isActive?: boolean; // virtual helper — derived from status
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -34,9 +36,11 @@ export type VenueCreationAttributes = Optional<
   VenueAttributes,
   | 'id'
   | 'description'
+  | 'phone'
   | 'latitude'
   | 'longitude'
   | 'status'
+  | 'isActive'
   | 'isVerified'
   | 'avgRating'
   | 'totalReviews'
@@ -58,6 +62,7 @@ export class Venue
   declare latitude: number | null;
   declare longitude: number | null;
   declare pricePerHour: number;
+  declare phone: string | null;
   declare status: VenueStatus;
   declare isVerified: boolean;
   declare avgRating: number;
@@ -119,6 +124,10 @@ Venue.init(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       field: 'price_per_hour',
+    },
+    phone: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM(...Object.values(VenueStatus)),

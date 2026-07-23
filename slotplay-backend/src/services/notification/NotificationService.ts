@@ -4,17 +4,13 @@
  * Handles both database notifications and email notifications.
  */
 
-
-
 import { Notification, User } from '@/models';
 import {
   sendBookingConfirmationEmail,
   sendPaymentSubmittedNotificationEmail,
   sendPaymentRejectedEmail,
 } from '@/services/email/EmailService';
-import { Notification, User } from '@/models';
 import { logger } from '@/config/logger';
-import { Notification, User } from '@/models';
 import { NotificationType } from '@/types';
 
 // ── Create a notification in the database ──────────────────────────────────────
@@ -49,32 +45,34 @@ export async function notifyBookingConfirmed(
   bookingDetails: {
     bookingRef: string;
     venueName: string;
+    address: string;
     date: string;
     startTime: string;
     endTime: string;
     amount: number;
     userEmail: string;
+    upiId?: string;
   },
 ): Promise<void> {
   const user = await User.findByPk(userId);
   if (!user) return;
 
-  // Store in DB
   await createNotification(
     userId,
-    'booking_confirmed',
+    NotificationType.BOOKING_CONFIRMED,
     'Booking Confirmed! 🎉',
     `Your booking at ${bookingDetails.venueName} on ${bookingDetails.date} has been confirmed.`,
   );
 
-  // Send email
   await sendBookingConfirmationEmail(bookingDetails.userEmail, user.name, {
     bookingRef: bookingDetails.bookingRef,
-    venueName: bookingDetails.venueName,
-    date: bookingDetails.date,
-    startTime: bookingDetails.startTime,
-    endTime: bookingDetails.endTime,
-    amount: bookingDetails.amount,
+    venueName:  bookingDetails.venueName,
+    address:    bookingDetails.address,
+    date:       bookingDetails.date,
+    startTime:  bookingDetails.startTime,
+    endTime:    bookingDetails.endTime,
+    amount:     bookingDetails.amount,
+    upiId:      bookingDetails.upiId,
   });
 
   logger.info('[NotificationService] Sent booking confirmed notification', {
@@ -89,6 +87,7 @@ export async function notifyPaymentSubmitted(
   ownerId: string,
   paymentDetails: {
     bookingRef: string;
+    userName: string;
     userEmail: string;
     venueName: string;
     amount: number;
@@ -98,21 +97,20 @@ export async function notifyPaymentSubmitted(
   const owner = await User.findByPk(ownerId);
   if (!owner) return;
 
-  // Store in DB
   await createNotification(
     ownerId,
-    'payment_submitted',
+    NotificationType.PAYMENT_SUBMITTED,
     'Payment Awaiting Verification ⏳',
     `${paymentDetails.userEmail} submitted payment for booking ${paymentDetails.bookingRef}. Please verify.`,
   );
 
-  // Send email
   await sendPaymentSubmittedNotificationEmail(owner.email, owner.name, {
     bookingRef: paymentDetails.bookingRef,
-    userEmail: paymentDetails.userEmail,
-    venueName: paymentDetails.venueName,
-    amount: paymentDetails.amount,
-    utrNumber: paymentDetails.utrNumber,
+    userName:   paymentDetails.userName,
+    userEmail:  paymentDetails.userEmail,
+    venueName:  paymentDetails.venueName,
+    amount:     paymentDetails.amount,
+    utrNumber:  paymentDetails.utrNumber,
   });
 
   logger.info('[NotificationService] Sent payment submitted notification', {
@@ -135,24 +133,20 @@ export async function notifyPaymentRejected(
   const user = await User.findByPk(userId);
   if (!user) return;
 
-  // Store in DB
   await createNotification(
     userId,
-    'payment_rejected',
+    NotificationType.PAYMENT_REJECTED,
     'Payment Not Verified ❌',
-    `Your payment for booking ${rejectionDetails.bookingRef} could not be verified. ${rejectionDetails.reason ? `Reason: ${rejectionDetails.reason}` : ''}`,
+    `Your payment for booking ${rejectionDetails.bookingRef} could not be verified.${
+      rejectionDetails.reason ? ` Reason: ${rejectionDetails.reason}` : ''
+    }`,
   );
 
-  // Send email
-  await sendPaymentRejectedEmail(
-    rejectionDetails.userEmail,
-    user.name,
-    {
-      bookingRef: rejectionDetails.bookingRef,
-      venueName: rejectionDetails.venueName,
-      reason: rejectionDetails.reason,
-    },
-  );
+  await sendPaymentRejectedEmail(rejectionDetails.userEmail, user.name, {
+    bookingRef: rejectionDetails.bookingRef,
+    venueName:  rejectionDetails.venueName,
+    reason:     rejectionDetails.reason,
+  });
 
   logger.info('[NotificationService] Sent payment rejected notification', {
     userId,
@@ -172,7 +166,6 @@ export async function getUserNotifications(
   pagination: { page: number; limit: number; total: number };
 }> {
   const offset = (page - 1) * limit;
-
   const where: any = { userId };
   if (type) where.type = type;
 

@@ -18,20 +18,20 @@ export const createBookingSchema = z.object({
 });
 
 // ── Submit Payment (UPI) ──────────────────────────────────────────────────────
+// bookingId comes from req.params.id — not required in the body
 
 export const submitPaymentSchema = z.object({
-  bookingId: z.string().uuid('Invalid booking ID'),
   utrNumber: z
     .string()
     .trim()
-    .regex(/^[A-Z0-9]{22}$/, 'Invalid UTR format (22 alphanumeric characters)'),
+    .regex(/^\d{12,16}$/, 'UTR must be 12 to 16 digits'),
   // Screenshot is uploaded as file via Multer, not in body
 });
 
 // ── Verify Payment (Owner) ────────────────────────────────────────────────────
+// bookingId comes from req.params.id — not required in the body
 
 export const verifyPaymentSchema = z.object({
-  bookingId: z.string().uuid('Invalid booking ID'),
   approved: z.boolean(),
   rejectionReason: z.string().trim().max(500).optional(),
 });
@@ -47,9 +47,9 @@ export const listBookingsSchema = z.object({
 });
 
 // ── Cancel Booking (User) ─────────────────────────────────────────────────────
+// bookingId comes from req.params.id — not required in the body
 
 export const cancelBookingSchema = z.object({
-  bookingId: z.string().uuid('Invalid booking ID'),
   reason: z.string().trim().max(500).optional(),
 });
 

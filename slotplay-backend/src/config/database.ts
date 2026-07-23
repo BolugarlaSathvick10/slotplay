@@ -59,11 +59,14 @@ export async function connectDatabase(): Promise<void> {
 }
 
 // ── Sync helper (dev only — use migrations in production) ─────────────────────
-export async function syncDatabase(force = false): Promise<void> {
+export async function syncDatabase(_force = false): Promise<void> {
   if (env.NODE_ENV === 'production') {
     logger.warn('syncDatabase called in production — skipped. Use migrations.');
     return;
   }
-  await sequelize.sync({ force, alter: !force });
-  logger.info(`Database synced (force=${force})`);
+  // Never use alter:true — Sequelize generates invalid SQL for unique constraints on PostgreSQL.
+  // Never use force:true in normal dev flow — it drops all tables and wipes seeded data.
+  // sync() with no options is safe: creates missing tables, leaves existing ones untouched.
+  await sequelize.sync({ force: false });
+  logger.info('Database synced (missing tables created, existing tables untouched)');
 }

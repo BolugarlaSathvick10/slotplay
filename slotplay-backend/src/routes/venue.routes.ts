@@ -23,6 +23,12 @@ const router = Router();
 /** List venues with optional filters */
 router.get('/', validate(listVenuesSchema), venueController.listVenues);
 
+/** List all sports (for filtering and venue creation) */
+router.get('/lists/sports', venueController.getSports);
+
+/** List all amenities (for venue creation and detail display) */
+router.get('/lists/amenities', venueController.getAmenities);
+
 /** Get single venue detail */
 router.get('/:id', venueController.getVenue);
 
@@ -57,13 +63,5 @@ router.post(
   validate(submitReviewSchema),
   reviewController.submitReview,
 );
-
-// ── Dropdown/lookup routes ────────────────────────────────────────────────────
-
-/** List all sports (for filtering and venue creation) */
-router.get('/lists/sports', venueController.getSports);
-
-/** List all amenities (for venue creation and detail display) */
-router.get('/lists/amenities', venueController.getAmenities);
 
 export { router as venueRouter };

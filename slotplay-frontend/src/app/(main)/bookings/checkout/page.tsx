@@ -33,8 +33,12 @@ function CheckoutContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!screenshot || utr.length < 10) { toast.error('Screenshot and UTR required'); return; }
-    await submitPayment.mutateAsync({ bookingId, utrNumber: utr, screenshot });
+    if (!screenshot || !/^\d{12,16}$/.test(utr)) { toast.error('Screenshot and a valid 12–16 digit UTR are required'); return; }
+    try {
+      await submitPayment.mutateAsync({ bookingId, utrNumber: utr, screenshot });
+    } catch {
+      return;
+    }
     setDone(true);
   };
 
@@ -126,15 +130,20 @@ function CheckoutContent() {
           <label className="block text-sm font-bold text-gray-900 dark:text-white mb-2">UTR / Transaction ID</label>
           <input
             value={utr}
-            onChange={e => setUtr(e.target.value.replace(/\s/g, '').toUpperCase())}
-            placeholder="From your UPI app transaction history"
+            onChange={e => setUtr(e.target.value.replace(/\D/g, ''))}
+            placeholder="Enter your 12–16 digit UTR number"
+            maxLength={16}
+            inputMode="numeric"
             className="w-full font-mono text-center px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
+          <p className="mt-1.5 text-xs text-gray-400">
+            You can find the UTR/Reference Number in your UPI payment app or bank transaction details.
+          </p>
         </div>
 
         <button
           type="submit"
-          disabled={!screenshot || utr.length < 10 || submitPayment.isPending}
+          disabled={!screenshot || !/^\d{12,16}$/.test(utr) || submitPayment.isPending}
           className="w-full py-4 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-300 dark:disabled:bg-brand-900 text-white font-black text-base rounded-xl transition-colors"
         >
           {submitPayment.isPending ? 'Submitting…' : 'Confirm payment →'}

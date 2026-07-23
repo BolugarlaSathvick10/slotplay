@@ -14,7 +14,7 @@ import { NotificationBell } from '@/components/layout/NotificationBell';
 import {
   LayoutDashboard, User, CalendarCheck, MapPin, Bell,
   PlusSquare, Clock, BarChart2, Users, Shield,
-  LogOut, ChevronRight, Bell, X, Menu,
+  LogOut, ChevronRight, X, Menu,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 

@@ -62,7 +62,7 @@ export default function NewVenuePage() {
       toast.success('Venue created!');
       router.push(`/owner/venues`);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message ?? 'Failed to create venue'),
+    onError: (err: any) => toast.error(err.message ?? 'Failed to create venue'),
   });
 
   const isStepValid = () => {

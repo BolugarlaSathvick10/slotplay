@@ -5,17 +5,11 @@
  * Controllers call this — they never touch models directly.
  */
 
-import { Op, Sequelize } from 'sequelize';
+import { Op } from 'sequelize';
 import { Venue, Sport, Amenity, Review, OwnerProfile, User, VenueImage } from '@/models';
-
-
-
-
-
-
-
 import { AppError } from '@/utils/AppError';
 import { logger } from '@/config/logger';
+import { VenueStatus, SlotStatus } from '@/types';
 import type { ListVenuesInput, CreateVenueInput, UpdateVenueInput } from '@/validators/venue.validators';
 
 // ── Haversine distance calculation (km) ──────────────────────────────────────
@@ -26,7 +20,7 @@ function distanceBetween(
   lat2: number,
   lon2: number,
 ): number {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -51,8 +45,9 @@ export async function listVenues(
   const offset = (page - 1) * limit;
 
   // Build WHERE clause
-  const where: any = { isActive: true };
+  const where: any = { status: 'active' };
   if (city) where.city = { [Op.iLike]: `%${city}%` };
+  if (sportId) where.sportId = sportId;
   if (search) {
     where[Op.or] = [
       { name: { [Op.iLike]: `%${search}%` } },
@@ -60,16 +55,17 @@ export async function listVenues(
     ];
   }
 
-  // Fetch venues
+  // Fetch venues — VenueImage uses url+storageKey (not imageUrl/category)
+  // Sport uses iconUrl (not icon)
+  // Sequelize hasMany includes do NOT support limit/order inside the include itself
   let venues = await Venue.findAll({
     where,
     include: [
       {
         model: Sport,
-        as: 'sports',
-        where: sportId ? { id: sportId } : undefined,
-        through: { attributes: [] },
-        attributes: ['id', 'name', 'icon'],
+        as: 'sport',
+        // sportId filter already in where clause above; no need for where here
+        attributes: ['id', 'name', 'iconUrl'],
       },
       {
         model: Amenity,
@@ -85,9 +81,8 @@ export async function listVenues(
       {
         model: VenueImage,
         as: 'images',
-        attributes: ['id', 'imageUrl', 'category'],
-        limit: 1,
-        order: [['createdAt', 'ASC']],
+        // Use correct column names from VenueImage model: url, storageKey, isPrimary, sortOrder
+        attributes: ['id', 'url', 'storageKey', 'isPrimary', 'sortOrder'],
       },
       {
         model: Review,
@@ -96,31 +91,46 @@ export async function listVenues(
         required: false,
       },
     ],
-    distinct: true,
     subQuery: false,
   });
 
   // Filter by distance if lat/lon provided
   if (latitude && longitude) {
     venues = venues.filter((v) => {
+      if (v.latitude == null || v.longitude == null) return true;
       const dist = distanceBetween(latitude, longitude, v.latitude, v.longitude);
       return dist <= radiusKm;
     });
   }
 
-  // Calculate average rating for each venue
+  // Calculate average rating and pick primary image
   const enriched = venues.map((v) => {
-    const reviews = v.reviews as any[];
+    const reviews = (v as any).reviews ?? [];
+    const sport = (v as any).sport;
+    const allImages: any[] = (v as any).images ?? [];
+
+    // Pick the primary image (or first by sortOrder) for list view
+    const primaryImage =
+      allImages.find((img: any) => img.isPrimary) ??
+      allImages.sort((a: any, b: any) => a.sortOrder - b.sortOrder)[0] ??
+      null;
+
     const avgRating =
       reviews.length > 0
-        ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+        ? (reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length).toFixed(1)
         : null;
+
     return {
       ...v.toJSON(),
+      // Expose sport both inline and in sports[] array (frontend expects sports[])
+      sports: sport ? [sport] : [],
+      isActive: v.status === 'active',
       averageRating: avgRating,
       reviewCount: reviews.length,
+      // Expose a single previewImage for list cards
+      previewImage: primaryImage ? primaryImage.url : null,
       distance:
-        latitude && longitude
+        latitude && longitude && v.latitude != null && v.longitude != null
           ? distanceBetween(latitude, longitude, v.latitude, v.longitude).toFixed(1)
           : null,
     };
@@ -130,20 +140,20 @@ export async function listVenues(
   const sorted = enriched.sort((a, b) => {
     switch (sortBy) {
       case 'rating':
-        return (b.averageRating || 0) - (a.averageRating || 0);
+        return (parseFloat(b.averageRating ?? '0') || 0) - (parseFloat(a.averageRating ?? '0') || 0);
       case 'price':
         return a.pricePerHour - b.pricePerHour;
       case 'distance':
         if (!a.distance || !b.distance) return 0;
         return parseFloat(a.distance) - parseFloat(b.distance);
       case 'newest':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime();
       default:
         return 0;
     }
   });
 
-  // Paginate
+  // Paginate in JS (filtering by distance already reduced the set)
   const total = sorted.length;
   const paginated = sorted.slice(offset, offset + limit);
 
@@ -167,9 +177,8 @@ export async function getVenueDetail(venueId: string): Promise<any> {
     include: [
       {
         model: Sport,
-        as: 'sports',
-        through: { attributes: [] },
-        attributes: ['id', 'name', 'icon'],
+        as: 'sport',
+        attributes: ['id', 'name', 'iconUrl'],
       },
       {
         model: Amenity,
@@ -184,7 +193,8 @@ export async function getVenueDetail(venueId: string): Promise<any> {
           {
             model: OwnerProfile,
             as: 'ownerProfile',
-            attributes: ['upiId', 'bankAccountHolder', 'bankName'],
+            // OwnerProfile has: businessName, gstNumber, isApproved — no payment fields
+            attributes: ['businessName', 'gstNumber', 'isApproved'],
           },
         ],
         attributes: ['id', 'name', 'email', 'phone', 'avatarUrl'],
@@ -192,7 +202,8 @@ export async function getVenueDetail(venueId: string): Promise<any> {
       {
         model: VenueImage,
         as: 'images',
-        attributes: ['id', 'imageUrl', 'category'],
+        // Correct VenueImage columns: id, url, storageKey, isPrimary, sortOrder
+        attributes: ['id', 'url', 'storageKey', 'isPrimary', 'sortOrder'],
       },
       {
         model: Review,
@@ -205,8 +216,6 @@ export async function getVenueDetail(venueId: string): Promise<any> {
             attributes: ['id', 'name', 'avatarUrl'],
           },
         ],
-        order: [['createdAt', 'DESC']],
-        limit: 10,
       },
     ],
   });
@@ -215,17 +224,26 @@ export async function getVenueDetail(venueId: string): Promise<any> {
     throw AppError.notFound('Venue');
   }
 
-  // Calculate average rating
-  const reviews = venue.reviews as any[];
+  const reviews = (venue as any).reviews ?? [];
   const avgRating =
     reviews.length > 0
-      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+      ? (reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviews.length).toFixed(1)
       : null;
+
+  // Sort images by sortOrder, primary first
+  const images: any[] = ((venue as any).images ?? []).sort((a: any, b: any) => {
+    if (a.isPrimary && !b.isPrimary) return -1;
+    if (!a.isPrimary && b.isPrimary) return 1;
+    return a.sortOrder - b.sortOrder;
+  });
 
   logger.debug('[VenueService] Fetched venue detail', { venueId });
 
   return {
     ...venue.toJSON(),
+    images,
+    sports: (venue as any).sport ? [(venue as any).sport] : [],
+    isActive: venue.status === 'active',
     averageRating: avgRating,
     reviewCount: reviews.length,
   };
@@ -234,15 +252,19 @@ export async function getVenueDetail(venueId: string): Promise<any> {
 // ── Create venue (owner-only) ─────────────────────────────────────────────────
 
 export async function createVenue(userId: string, input: CreateVenueInput): Promise<any> {
-  // Verify user is an owner
+  // Verify user is an owner (roleId 2)
   const user = await User.findByPk(userId);
   if (!user || user.roleId !== 2) {
     throw new AppError('Only owners can create venues', 403, 'FORBIDDEN');
   }
 
-  // Create venue
+  // Venue has a single sportId FK — not a M:M sports table
+  // Use the first entry from sportIds array
+  const primarySportId = input.sportIds[0];
+
   const venue = await Venue.create({
     ownerId: userId,
+    sportId: primarySportId,
     name: input.name,
     description: input.description,
     address: input.address,
@@ -253,22 +275,18 @@ export async function createVenue(userId: string, input: CreateVenueInput): Prom
     longitude: input.longitude,
     pricePerHour: input.pricePerHour,
     phone: input.phone,
-    isActive: true,
+    status: VenueStatus.ACTIVE,
+    isVerified: true,
   });
 
-  // Associate sports
-  if (input.sportIds.length > 0) {
-    await venue.addSports(input.sportIds);
-  }
-
-  // Associate amenities
+  // Associate amenities (M:M through venue_amenities)
   if (input.amenityIds && input.amenityIds.length > 0) {
-    await venue.addAmenities(input.amenityIds);
+    await (venue as any).setAmenities(input.amenityIds);
   }
 
   logger.info('[VenueService] Created venue', { venueId: venue.id, ownerId: userId });
 
-  return venue;
+  return getVenueDetail(venue.id);
 }
 
 // ── Update venue (owner-only) ─────────────────────────────────────────────────
@@ -277,40 +295,41 @@ export async function updateVenue(venueId: string, userId: string, input: Update
   const venue = await Venue.findByPk(venueId);
   if (!venue) throw AppError.notFound('Venue');
 
-  // Verify ownership
   if (venue.ownerId !== userId) {
     throw new AppError('You do not own this venue', 403, 'FORBIDDEN');
   }
 
-  // Update fields
+  // Update scalar fields
   await venue.update({
     name: input.name ?? venue.name,
     description: input.description ?? venue.description,
     pricePerHour: input.pricePerHour ?? venue.pricePerHour,
-    phone: input.phone ?? venue.phone,
-    isActive: input.isActive ?? venue.isActive,
+    phone: input.phone ?? (venue as any).phone,
+    // sportIds[0] maps to the single sportId FK
+    ...(input.sportIds && input.sportIds.length > 0 ? { sportId: input.sportIds[0] } : {}),
+    status:
+      input.isActive === undefined
+        ? venue.status
+        : input.isActive
+        ? VenueStatus.ACTIVE
+        : VenueStatus.SUSPENDED,
   });
 
-  // Update sports if provided
-  if (input.sportIds) {
-    await venue.setSports(input.sportIds);
-  }
-
-  // Update amenities if provided
+  // Update amenities (M:M)
   if (input.amenityIds) {
-    await venue.setAmenities(input.amenityIds);
+    await (venue as any).setAmenities(input.amenityIds);
   }
 
   logger.info('[VenueService] Updated venue', { venueId });
 
-  return venue;
+  return getVenueDetail(venue.id);
 }
 
 // ── Get sports dropdown ───────────────────────────────────────────────────────
 
 export async function getSports(): Promise<any[]> {
   return Sport.findAll({
-    attributes: ['id', 'name', 'icon'],
+    attributes: ['id', 'name', 'iconUrl'],
     order: [['name', 'ASC']],
   });
 }

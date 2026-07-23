@@ -10,6 +10,7 @@ import { Slot } from '@/models/Slot';
 import { Booking } from '@/models/Booking';
 import { AppError } from '@/utils/AppError';
 import { logger } from '@/config/logger';
+import { SlotStatus, BookingStatus } from '@/types';
 
 // ── Helper: parse a date into YYYY-MM-DD string ───────────────────────────────
 
@@ -57,8 +58,8 @@ export async function getSlotsByDate(venueId: string, date: Date | string): Prom
   const result: SlotWithAvailability[] = slots.map((slot) => {
     const booking = (slot as any).booking;
     const isAvailable =
-      slot.status === 'available' &&
-      (!booking || !['confirmed', 'pending_payment', 'pending_verification'].includes(booking.status));
+      slot.status === SlotStatus.AVAILABLE &&
+      (!booking || !([BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING_VERIFICATION] as string[]).includes(booking.status));
 
     return {
       id: slot.id,
@@ -127,8 +128,8 @@ export async function getSlotsByDateRange(
   for (const slot of slots) {
     const booking = (slot as any).booking;
     const isAvailable =
-      slot.status === 'available' &&
-      (!booking || !['confirmed', 'pending_payment', 'pending_verification'].includes(booking.status));
+      slot.status === SlotStatus.AVAILABLE &&
+      (!booking || !([BookingStatus.CONFIRMED, BookingStatus.PENDING_PAYMENT, BookingStatus.PENDING_VERIFICATION] as string[]).includes(booking.status));
 
     const entry: SlotWithAvailability = {
       id: slot.id,

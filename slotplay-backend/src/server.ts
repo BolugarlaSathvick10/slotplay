@@ -15,14 +15,26 @@
 // Load .env before anything else (ts-node-dev runs from project root)
 import 'dotenv/config';
 
-import { env } from './config/env';
-import { logger } from './config/logger';
-import { connectDatabase } from './config/database';
+import { env } from './config/env';import { logger } from './config/logger';
+import { connectDatabase, syncDatabase } from './config/database';
 import { configureCloudinary } from './config/cloudinary';
 import { createApp } from './app';
 
 // Importing models registers all Sequelize associations defined in models/index.ts
 import './models/index';
+import { Role, Sport } from './models';
+import { UserRole } from './types';
+
+async function ensureDevBrowseData(): Promise<void> {
+  // Only ensure roles and sports exist on startup — full venue/slot data comes from npm run seed
+  await Role.findOrCreate({ where: { name: UserRole.USER  }, defaults: { name: UserRole.USER  } });
+  await Role.findOrCreate({ where: { name: UserRole.OWNER }, defaults: { name: UserRole.OWNER } });
+  await Role.findOrCreate({ where: { name: UserRole.ADMIN }, defaults: { name: UserRole.ADMIN } });
+
+  await Sport.findOrCreate({ where: { name: 'Cricket'  }, defaults: { name: 'Cricket'  } });
+  await Sport.findOrCreate({ where: { name: 'Football' }, defaults: { name: 'Football' } });
+  await Sport.findOrCreate({ where: { name: 'Badminton'}, defaults: { name: 'Badminton'} });
+}
 
 async function bootstrap(): Promise<void> {
   try {
@@ -31,6 +43,13 @@ async function bootstrap(): Promise<void> {
 
     // Establish database connection
     await connectDatabase();
+
+    if (env.NODE_ENV === 'development') {
+      // alter mode — adds missing columns without dropping existing data
+      // Never use force:true here as it wipes all tables (and seeded passwords) on every restart
+      await syncDatabase(false);
+      await ensureDevBrowseData();
+    }
 
     // Build Express application
     const app = createApp();

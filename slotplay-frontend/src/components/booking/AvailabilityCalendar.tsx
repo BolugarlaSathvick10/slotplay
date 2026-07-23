@@ -91,10 +91,16 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
       return;
     }
 
-    const booking = await createBooking.mutateAsync({
-      slotId: selectedSlotId,
-      venueId,
-    });
+    let booking;
+    try {
+      booking = await createBooking.mutateAsync({
+        slotId: selectedSlotId,
+        venueId,
+      });
+    } catch {
+      // onError in useCreateBooking already shows a toast — nothing more to do here
+      return;
+    }
 
     // Redirect to checkout with booking context
     router.push(

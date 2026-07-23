@@ -26,7 +26,9 @@ export function validate<T>(schema: ZodSchema<T>) {
         errors[field].push(issue.message);
       });
 
-      const firstError = Object.values(errors)[0]?.[0] ?? 'Validation failed';
+      const firstField = Object.keys(errors)[0] ?? 'root';
+      const firstMessage = Object.values(errors)[0]?.[0] ?? 'Validation failed';
+      const firstError = `${firstField}: ${firstMessage}`;
 
       const error = new AppError(firstError, 422, 'VALIDATION_ERROR') as AppError & {
         validationErrors: Record<string, string[]>;

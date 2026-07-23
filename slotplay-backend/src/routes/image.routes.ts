@@ -53,7 +53,7 @@ router.post(
       const result = await processUpload(files[i], 'venue-images');
       const img = await VenueImage.create({
         venueId,
-        storageKey: result.storageKey,
+        storageKey: result.key,   // UploadResult uses 'key' not 'storageKey'
         url: result.url,
         isPrimary: !hasPrimary && i === 0,
         sortOrder: nextSort + i,

@@ -106,6 +106,9 @@ export interface Booking {
   cancelledAt?: string;
   slot?: Slot;
   venue?: Venue;
+  payment?: Payment;
+  paymentVerification?: PaymentVerification;
+  user?: Pick<User, 'id' | 'name' | 'avatarUrl' | 'email'>;
   createdAt: string;
 }
 
@@ -190,62 +193,4 @@ export interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-}
-
-// ── Booking types ─────────────────────────────────────────────────────────────
-
-export type BookingStatus = 'pending_payment' | 'confirmed' | 'cancelled' | 'rejected';
-export type PaymentStatus = 'pending' | 'submitted' | 'verified' | 'rejected';
-
-export interface Payment {
-  id: string;
-  bookingId: string;
-  amount: number;
-  currency: string;
-  method: string;
-  status: PaymentStatus;
-  createdAt?: string;
-}
-
-export interface PaymentVerification {
-  id: string;
-  paymentId: string;
-  bookingId: string;
-  utrNumber: string;
-  screenshotUrl: string;
-  status: 'submitted' | 'approved' | 'rejected';
-  reviewNote?: string;
-  submittedAt?: string;
-  createdAt?: string;
-}
-
-export interface Booking {
-  id: string;
-  userId: string;
-  slotId: string;
-  venueId: string;
-  bookingRef: string;
-  status: BookingStatus;
-  totalAmount: number;
-  venue?: Partial<Venue>;
-  slot?: {
-    id: string;
-    startTime: string;
-    endTime: string;
-    pricePerHour: number;
-  };
-  payment?: Payment;
-  paymentVerification?: PaymentVerification;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface Notification {
-  id: string;
-  userId: string;
-  type: string;
-  title: string;
-  body: string;
-  isRead: boolean;
-  createdAt?: string;
 }

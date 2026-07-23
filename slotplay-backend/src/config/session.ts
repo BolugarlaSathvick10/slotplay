@@ -2,15 +2,7 @@
  * config/session.ts
  *
  * express-session configuration.
- *
- * Sessions are persisted to the Neon PostgreSQL `sessions` table via
- * connect-pg-simple. This keeps the backend stateless (no in-process store)
- * and survives Railway restarts.
- *
- * Cookie settings follow security best practices:
- *   - httpOnly:   JS cannot access the cookie → mitigates XSS theft
- *   - secure:     Sent only over HTTPS in production
- *   - sameSite:   Strict → no cross-site request forgery
+ * Sessions are persisted to Neon PostgreSQL via connect-pg-simple.
  */
 
 import session from 'express-session';
@@ -20,11 +12,12 @@ import { env } from './env';
 import { logger } from './logger';
 
 // ── pg Pool for session store ─────────────────────────────────────────────────
-// Separate pool from Sequelize so session persistence works independently
 const pgPool = new Pool({
   connectionString: env.DATABASE_URL,
-  ssl: { require: true, rejectUnauthorized: false },
-  max: 3, // Session store needs only a small pool
+  // Neon requires SSL — 'require' is a Neon-specific option not in the pg types,
+  // so cast to any to avoid the TS2353 error while keeping the runtime behaviour
+  ssl: { rejectUnauthorized: false } as any,
+  max: 3,
 });
 
 pgPool.on('error', (err) => {
@@ -37,9 +30,7 @@ const PgStore = connectPgSimple(session);
 const store = new PgStore({
   pool: pgPool,
   tableName: env.SESSION_TABLE_NAME,
-  // Purge expired sessions every hour
   pruneSessionInterval: 60 * 60,
-  // Create the sessions table automatically if it doesn't exist
   createTableIfMissing: true,
 });
 
@@ -48,26 +39,25 @@ store.on('error', (err: Error) => {
 });
 
 // ── Session middleware factory ─────────────────────────────────────────────────
-export function buildSessionMiddleware(): session.RequestHandler {
+// express-session types expose RequestHandler via the session namespace
+export function buildSessionMiddleware(): ReturnType<typeof session> {
   return session({
     store,
     secret: env.SESSION_SECRET,
-    resave: false,          // Don't resave if session wasn't modified
-    saveUninitialized: false, // Don't save empty sessions (GDPR-friendly)
-    rolling: true,          // Reset expiry on each request
-    name: 'slotplay.sid',  // Custom cookie name — obscures the framework
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    name: 'slotplay.sid',
     cookie: {
       maxAge: env.SESSION_MAX_AGE_MS,
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
       sameSite: env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      // domain intentionally omitted — defaults to request host
     },
   });
 }
 
 // ── Type augmentation ─────────────────────────────────────────────────────────
-// Extend express-session's SessionData so req.session.userId is typed everywhere
 declare module 'express-session' {
   interface SessionData {
     userId: string;

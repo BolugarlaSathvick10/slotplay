@@ -11,6 +11,7 @@ import { Venue } from '@/models/Venue';
 import { Op } from 'sequelize';
 import { sendSuccess, sendPaginated } from '@/utils/apiResponse';
 import { AppError } from '@/utils/AppError';
+import { VenueStatus } from '@/types';
 
 const router = Router();
 
@@ -79,9 +80,11 @@ router.patch('/venues/:id', asyncHandler(async (req, res) => {
   const venue = await Venue.findByPk(req.params.id);
   if (!venue) throw AppError.notFound('Venue');
 
+  // Venue uses status enum, not an isActive boolean column
   const { isActive } = req.body;
-  await venue.update({ isActive });
-  sendSuccess(res, { id: venue.id, isActive: venue.isActive }, 'Venue updated');
+  const status: VenueStatus = isActive ? VenueStatus.ACTIVE : VenueStatus.SUSPENDED;
+  await venue.update({ status });
+  sendSuccess(res, { id: venue.id, status: venue.status }, 'Venue updated');
 }));
 
 export { router as adminRouter };

@@ -341,4 +341,15 @@ async function issueAndSendOtp(user: User, purpose: OtpPurpose): Promise<void> {
     purpose,
     expiresAt,
   });
+
+  // In dev, email is not sent (Resend free tier restriction).
+  // Print the OTP to the terminal so you can use it directly.
+  if (process.env.NODE_ENV === 'development') {
+    console.log('\n┌─────────────────────────────────────┐');
+    console.log(`│  DEV OTP for ${user.email.padEnd(23)}│`);
+    console.log(`│  Code   : ${otpCode}                      │`);
+    console.log(`│  Purpose: ${purpose.padEnd(27)}│`);
+    console.log(`│  Expires: 10 minutes                 │`);
+    console.log('└─────────────────────────────────────┘\n');
+  }
 }

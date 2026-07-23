@@ -4,6 +4,9 @@ const nextConfig = {
   reactStrictMode: true,
 
   images: {
+    // Allow inline SVG data URIs used as placeholders when venues have no image
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
     remotePatterns: [
       // Allow serving images from the backend (local dev)
       {

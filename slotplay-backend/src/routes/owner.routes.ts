@@ -12,6 +12,7 @@ import { Slot } from '@/models/Slot';
 import { sendSuccess } from '@/utils/apiResponse';
 import { AppError } from '@/utils/AppError';
 import { logger } from '@/config/logger';
+import { SlotStatus } from '@/types';
 
 const router = Router();
 router.use(requireAuth);
@@ -100,7 +101,7 @@ router.post('/slots/generate', asyncHandler(async (req, res) => {
         startTime: startStr,
         endTime:   endStr,
         price:     price,
-        status:    'available',
+        status:    SlotStatus.AVAILABLE,
       });
       created.push(slot);
     }

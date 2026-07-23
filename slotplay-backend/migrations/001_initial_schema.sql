@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS venues (
   latitude       DECIMAL(10,8),
   longitude      DECIMAL(11,8),
   price_per_hour DECIMAL(10,2)  NOT NULL,
+  phone          VARCHAR(20),
   status         VARCHAR(20)    NOT NULL DEFAULT 'pending'
                    CHECK (status IN ('pending', 'active', 'suspended')),
   is_verified    BOOLEAN        NOT NULL DEFAULT false,

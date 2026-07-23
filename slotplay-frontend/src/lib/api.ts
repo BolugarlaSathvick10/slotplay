@@ -26,6 +26,12 @@ const api: AxiosInstance = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
+    // 401 = unauthenticated — expected when no session exists, not an error
+    // Return a resolved null so callers like getCurrentUser() get null back cleanly
+    if (error.response?.status === 401) {
+      return Promise.resolve({ data: { success: false, data: null } });
+    }
+
     // Surface the backend error message when available
     if (error.response?.data?.message) {
       const customError = new Error(error.response.data.message) as Error & {

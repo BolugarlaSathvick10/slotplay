@@ -48,6 +48,8 @@ export async function logoutUser() {
 export async function getCurrentUser(): Promise<User | null> {
   try {
     const { data } = await api.get<ApiSuccess<User>>('/api/auth/me');
+    // data.success is false when interceptor resolved a 401 as null
+    if (!data.success) return null;
     return data.data;
   } catch {
     return null;

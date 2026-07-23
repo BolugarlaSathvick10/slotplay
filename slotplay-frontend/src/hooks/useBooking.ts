@@ -19,7 +19,7 @@ export function useCreateBooking() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to create booking');
+      toast.error(err.message || 'Failed to create booking');
     },
   });
 }
@@ -34,7 +34,7 @@ export function useSubmitPayment() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to submit payment');
+      toast.error(err.message || 'Failed to submit payment');
     },
   });
 }
@@ -66,7 +66,7 @@ export function useCancelBooking() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to cancel booking');
+      toast.error(err.message || 'Failed to cancel booking');
     },
   });
 }
@@ -86,7 +86,7 @@ export function useVerifyPayment() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || 'Failed to verify payment');
+      toast.error(err.message || 'Failed to verify payment');
     },
   });
 }

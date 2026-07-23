@@ -6,20 +6,19 @@
 
 import { Op } from 'sequelize';
 import { Booking, Slot, Payment, PaymentVerification, Venue, User } from '@/models';
-
-
-
-
-
-
 import { AppError } from '@/utils/AppError';
 import { generateBookingRef } from '@/utils/helpers';
 import * as NotificationService from '@/services/notification/NotificationService';
 import { logger } from '@/config/logger';
-import { BookingStatus, PaymentStatus } from '@/types';
+import {
+  BookingStatus,
+  PaymentMethod,
+  PaymentStatus,
+  VerificationStatus,
+} from '@/types';
 import type { CreateBookingInput, VerifyPaymentInput } from '@/validators/booking.validators';
 
-// ── Create a booking (locks slot for 30 minutes) ────────────────────────────────
+// ── Create a booking (locks slot) ──────────────────────────────────────────────
 
 export async function createBooking(
   userId: string,
@@ -27,52 +26,50 @@ export async function createBooking(
 ): Promise<Booking> {
   const { slotId, venueId } = input;
 
-  // Verify slot exists and is available
   const slot = await Slot.findByPk(slotId);
   if (!slot) throw AppError.notFound('Slot');
   if (slot.venueId !== venueId) {
     throw new AppError('Slot does not belong to this venue', 400, 'INVALID_SLOT');
   }
 
-  // Check if slot already has a booking
+  // Check no active booking on this slot
   const existingBooking = await Booking.findOne({
     where: {
       slotId,
-      status: { [Op.in]: ['pending_payment', 'pending_verification', 'confirmed'] },
+      status: {
+        [Op.in]: [
+          BookingStatus.PENDING_PAYMENT,
+          BookingStatus.PENDING_VERIFICATION,
+          BookingStatus.CONFIRMED,
+        ],
+      },
     },
   });
-
   if (existingBooking) {
     throw new AppError('This slot is already booked', 409, 'SLOT_UNAVAILABLE');
   }
 
-  // Create booking in awaiting_payment state
   const bookingRef = generateBookingRef();
   const booking = await Booking.create({
     userId,
     slotId,
     venueId,
     bookingRef,
-    status: 'pending_payment',
+    status: BookingStatus.PENDING_PAYMENT,
     totalAmount: Number(slot.price),
   });
 
-  // Create initial payment record
+  // Initial payment record — userId is required by PaymentAttributes
   await Payment.create({
     bookingId: booking.id,
-    amount: slot.pricePerHour,
-    currency: 'INR',
-    method: 'upi',
-    status: 'pending' as PaymentStatus,
-  });
-
-  logger.info('[BookingService] Created booking', {
-    bookingId: booking.id,
-    bookingRef,
     userId,
-    slotId,
+    amount:   Number(slot.price),   // slot.price — correct field on Slot
+    currency: 'INR',
+    method:   PaymentMethod.UPI_MANUAL, // 'upi_manual' — correct enum value
+    status:   PaymentStatus.PENDING,
   });
 
+  logger.info('[BookingService] Created booking', { bookingId: booking.id, bookingRef, userId, slotId });
   return booking;
 }
 
@@ -84,57 +81,50 @@ export async function submitPayment(
   utrNumber: string,
   screenshotUrl: string,
 ): Promise<PaymentVerification> {
-  // Verify booking exists and belongs to user
   const booking = await Booking.findByPk(bookingId, {
-    include: [{ model: Venue, as: 'venue' }, { model: User, as: 'user' }],
+    include: [
+      { model: Venue, as: 'venue' },
+      { model: User,  as: 'user'  },
+    ],
   });
 
   if (!booking) throw AppError.notFound('Booking');
   if (booking.userId !== userId) {
     throw new AppError('This booking does not belong to you', 403, 'FORBIDDEN');
   }
-
-  if (booking.status !== 'pending_payment') {
-    throw new AppError(
-      'This booking is not awaiting payment',
-      400,
-      'INVALID_STATE',
-    );
+  if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+    throw new AppError('This booking is not awaiting payment', 400, 'INVALID_STATE');
   }
 
-  // Get the payment
   const payment = await Payment.findOne({ where: { bookingId } });
   if (!payment) throw AppError.notFound('Payment');
 
-  // Create payment verification record
   const verification = await PaymentVerification.create({
-    paymentId: payment.id,
+    paymentId:     payment.id,
     bookingId,
+    submittedBy:   userId,
     utrNumber,
+    screenshotKey: screenshotUrl, // key and url are the same at submission time
     screenshotUrl,
-    status: 'submitted',
-    submittedAt: new Date(),
+    status:        VerificationStatus.SUBMITTED,
+    submittedAt:   new Date(),
   });
 
-  // Update payment status
-  await payment.update({ status: 'submitted' as PaymentStatus });
+  await payment.update({ status: PaymentStatus.SUBMITTED });
 
-  // Notify owner
-  const venue = booking.venue as any;
+  // Notify owner — include userName which is now required by notifyPaymentSubmitted
+  const venue = (booking as any).venue;
+  const user  = (booking as any).user;
   await NotificationService.notifyPaymentSubmitted(venue.ownerId, {
     bookingRef: booking.bookingRef,
-    userEmail: (booking.user as any).email,
-    venueName: venue.name,
-    amount: booking.totalAmount,
+    userName:   user.name,
+    userEmail:  user.email,
+    venueName:  venue.name,
+    amount:     booking.totalAmount,
     utrNumber,
   });
 
-  logger.info('[BookingService] Submitted payment', {
-    bookingId,
-    verificationId: verification.id,
-    utrNumber,
-  });
-
+  logger.info('[BookingService] Submitted payment', { bookingId, verificationId: verification.id, utrNumber });
   return verification;
 }
 
@@ -146,90 +136,61 @@ export async function verifyPayment(
 ): Promise<void> {
   const { bookingId, approved, rejectionReason } = input;
 
-  // Verify booking and ownership
   const booking = await Booking.findByPk(bookingId, {
     include: [
       { model: Venue, as: 'venue' },
-      { model: User, as: 'user' },
-      { model: Slot, as: 'slot' },
+      { model: User,  as: 'user'  },
+      { model: Slot,  as: 'slot'  },
     ],
   });
 
   if (!booking) throw AppError.notFound('Booking');
 
-  const venue = booking.venue as any;
+  const venue = (booking as any).venue;
   if (venue.ownerId !== ownerId) {
     throw new AppError('You do not own this venue', 403, 'FORBIDDEN');
   }
 
-  // Get payment verification
   const verification = await PaymentVerification.findOne({
     where: { bookingId },
     order: [['createdAt', 'DESC']],
   });
-
   if (!verification) throw AppError.notFound('Payment Verification');
 
+  const payment = await Payment.findByPk(verification.paymentId);
+  const user    = (booking as any).user;
+  const slot    = (booking as any).slot;
+
   if (approved) {
-    // Approve payment
-    await verification.update({ status: 'approved' });
+    await verification.update({ status: VerificationStatus.APPROVED });
+    if (payment) await payment.update({ status: PaymentStatus.VERIFIED });
+    await booking.update({ status: BookingStatus.CONFIRMED });
 
-    // Update payment status
-    const payment = await Payment.findByPk(verification.paymentId);
-    if (payment) {
-      await payment.update({ status: 'verified' as PaymentStatus });
-    }
-
-    // Mark booking as confirmed
-    await booking.update({ status: 'confirmed' as BookingStatus });
-
-    // Notify user
-    const user = booking.user as any;
-    const slot = booking.slot as any;
     await NotificationService.notifyBookingConfirmed(booking.userId, {
       bookingRef: booking.bookingRef,
-      venueName: venue.name,
-      date: slot.date,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      amount: booking.totalAmount,
-      userEmail: user.email,
+      venueName:  venue.name,
+      address:    venue.address,
+      date:       slot.date,
+      startTime:  slot.startTime,
+      endTime:    slot.endTime,
+      amount:     booking.totalAmount,
+      userEmail:  user.email,
     });
 
-    logger.info('[BookingService] Payment approved', {
-      bookingId,
-      verificationId: verification.id,
-    });
+    logger.info('[BookingService] Payment approved', { bookingId, verificationId: verification.id });
   } else {
-    // Reject payment
-    await verification.update({
-      status: 'rejected',
-      reviewNote: rejectionReason,
-    });
+    await verification.update({ status: VerificationStatus.REJECTED, reviewNote: rejectionReason });
+    if (payment) await payment.update({ status: PaymentStatus.REJECTED });
+    await booking.update({ status: BookingStatus.REJECTED });
 
-    // Update payment status
-    const payment = await Payment.findByPk(verification.paymentId);
-    if (payment) {
-      await payment.update({ status: 'rejected' as PaymentStatus });
-    }
-
-    // Mark booking as rejected (will free up the slot)
-    await booking.update({ status: 'rejected' as BookingStatus });
-
-    // Notify user
-    const user = booking.user as any;
     await NotificationService.notifyPaymentRejected(booking.userId, {
       bookingRef: booking.bookingRef,
-      venueName: venue.name,
-      reason: rejectionReason,
-      userEmail: user.email,
+      venueName:  venue.name,
+      reason:     rejectionReason,
+      userEmail:  user.email,
     });
 
-    logger.info('[BookingService] Payment rejected', {
-      bookingId,
-      verificationId: verification.id,
-      reason: rejectionReason,
-    });
+    logger.info('[BookingService] Payment rejected', { bookingId, verificationId: verification.id });
   }
 }
 
@@ -240,10 +201,7 @@ export async function getUserBookings(
   page: number = 1,
   limit: number = 10,
   status?: BookingStatus,
-): Promise<{
-  data: Booking[];
-  pagination: { page: number; limit: number; total: number };
-}> {
+): Promise<{ data: Booking[]; pagination: { page: number; limit: number; total: number } }> {
   const offset = (page - 1) * limit;
   const where: any = { userId };
   if (status) where.status = status;
@@ -251,8 +209,8 @@ export async function getUserBookings(
   const { count, rows } = await Booking.findAndCountAll({
     where,
     include: [
-      { model: Venue, as: 'venue' },
-      { model: Slot, as: 'slot' },
+      { model: Venue,   as: 'venue'   },
+      { model: Slot,    as: 'slot'    },
       { model: Payment, as: 'payment' },
     ],
     order: [['createdAt', 'DESC']],
@@ -260,10 +218,7 @@ export async function getUserBookings(
     offset,
   });
 
-  return {
-    data: rows,
-    pagination: { page, limit, total: count },
-  };
+  return { data: rows, pagination: { page, limit, total: count } };
 }
 
 // ── Get booking detail ────────────────────────────────────────────────────────
@@ -271,13 +226,10 @@ export async function getUserBookings(
 export async function getBookingDetail(bookingId: string, userId: string): Promise<Booking> {
   const booking = await Booking.findByPk(bookingId, {
     include: [
-      { model: Venue, as: 'venue' },
-      { model: Slot, as: 'slot' },
-      { model: Payment, as: 'payment' },
-      {
-        model: PaymentVerification,
-        as: 'verification',
-      },
+      { model: Venue,               as: 'venue'        },
+      { model: Slot,                as: 'slot'         },
+      { model: Payment,             as: 'payment'      },
+      { model: PaymentVerification, as: 'verification' },
     ],
   });
 
@@ -289,75 +241,45 @@ export async function getBookingDetail(bookingId: string, userId: string): Promi
   return booking;
 }
 
-// ── Cancel booking (user can only cancel awaiting_payment) ────────────────────
+// ── Cancel booking ────────────────────────────────────────────────────────────
 
-export async function cancelBooking(
-  bookingId: string,
-  userId: string,
-): Promise<void> {
+export async function cancelBooking(bookingId: string, userId: string): Promise<void> {
   const booking = await Booking.findByPk(bookingId);
   if (!booking) throw AppError.notFound('Booking');
   if (booking.userId !== userId) {
     throw new AppError('This booking does not belong to you', 403, 'FORBIDDEN');
   }
-
-  if (booking.status !== 'pending_payment') {
-    throw new AppError(
-      'Only awaiting_payment bookings can be cancelled',
-      400,
-      'CANNOT_CANCEL',
-    );
+  if (booking.status !== BookingStatus.PENDING_PAYMENT) {
+    throw new AppError('Only pending_payment bookings can be cancelled', 400, 'CANNOT_CANCEL');
   }
 
-  await booking.update({ status: 'cancelled' as BookingStatus });
-
+  await booking.update({ status: BookingStatus.CANCELLED });
   logger.info('[BookingService] Booking cancelled', { bookingId, userId });
 }
 
-// ── Get pending payment verifications for owner ────────────────────────────────
+// ── Get pending verifications for owner ───────────────────────────────────────
 
 export async function getPendingVerifications(
   ownerId: string,
   page: number = 1,
   limit: number = 20,
-): Promise<{
-  data: any[];
-  pagination: { page: number; limit: number; total: number };
-}> {
+): Promise<{ data: any[]; pagination: { page: number; limit: number; total: number } }> {
   const offset = (page - 1) * limit;
 
-  // Get bookings where owner's venue has awaiting payment
   const { count, rows } = await Booking.findAndCountAll({
-    where: {
-      status: 'pending_payment',
-    },
+    where: { status: BookingStatus.PENDING_PAYMENT },
     include: [
-      {
-        model: Venue,
-        as: 'venue',
-        where: { ownerId },
-        required: true,
-      },
-      { model: Slot, as: 'slot' },
-      { model: User, as: 'user' },
-      {
-        model: Payment,
-        as: 'payment',
-      },
-      {
-        model: PaymentVerification,
-        as: 'verification',
-      },
+      { model: Venue,               as: 'venue',        where: { ownerId }, required: true },
+      { model: Slot,                as: 'slot'         },
+      { model: User,                as: 'user'         },
+      { model: Payment,             as: 'payment'      },
+      { model: PaymentVerification, as: 'verification' },
     ],
     order: [['createdAt', 'DESC']],
     limit,
     offset,
-    distinct: true,
     subQuery: false,
   });
 
-  return {
-    data: rows.map((b) => b.toJSON()),
-    pagination: { page, limit, total: count },
-  };
+  return { data: rows.map(b => b.toJSON()), pagination: { page, limit, total: count } };
 }

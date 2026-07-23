@@ -1,21 +1,10 @@
-import type { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'Browse Turfs & Venues | SlotPlay',
-  description: 'Find and book sports venues near you. Cricket turfs, football grounds, badminton courts and more. Real-time availability, UPI payments.',
-  openGraph: {
-    title: 'Browse Sports Venues | SlotPlay',
-    description: 'Book cricket turfs, football grounds and more near you.',
-  },
-};
+ 'use client';
 
 /**
  * app/(main)/venues/page.tsx — Browse Turfs
  *
  * Full listing with sidebar filters, grid/list toggle, search, sport chips, and pagination.
  */
-
-'use client';
 
 import { useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';

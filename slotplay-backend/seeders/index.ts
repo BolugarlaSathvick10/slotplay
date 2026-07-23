@@ -1,383 +1,335 @@
 /**
  * seeders/index.ts
  *
- * Full production seed:
- *   1 Admin, 2 Owners, 5 Players
- *   10 Venues (5 per owner), 100+ Slots
- *   20 Bookings, Reviews, Notifications
+ * Seed: 5 Tirupati turfs, 1 admin, 2 owners, 5 players.
+ * 14 days × 5 random slots per venue — bulk inserted for speed.
  *
- * Run: npm run seed
- * Safe to run multiple times (idempotent via findOrCreate).
+ * Run once: npm run seed
  */
 
-import 'module-alias/register';
-import bcrypt from 'bcrypt';
+// Must be first — loads .env before any config module runs
+import 'dotenv/config';
+
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 import { sequelize } from '@/config/database';
 import {
   Role, User, Venue, Sport, Amenity, Slot, Booking,
   Payment, Review, Notification,
 } from '@/models';
 import { logger } from '@/config/logger';
+import {
+  BookingStatus,
+  NotificationType,
+  PaymentMethod,
+  PaymentStatus,
+  SlotStatus,
+  UserRole,
+  VenueStatus,
+} from '@/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function addHours(date: Date, h: number) {
-  return new Date(date.getTime() + h * 3_600_000);
+async function hash(pw: string): Promise<string> {
+  return bcrypt.hash(pw, 12);
 }
 
-function futureDate(daysFromNow: number) {
+/** Returns date string YYYY-MM-DD for today + daysFromNow */
+function dateStr(daysFromNow: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysFromNow);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return d.toISOString().split('T')[0];
 }
 
-async function hash(pw: string) {
-  return bcrypt.hash(pw, 12);
+/** Pad hour to HH:MM */
+function hhmm(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+/** Pick n unique random items from arr */
+function pickRandom<T>(arr: T[], n: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 async function seed() {
   await sequelize.authenticate();
-  logger.info('[Seed] Connected to database');
+  logger.info('[Seed] Connected');
 
-  // ── Roles ────────────────────────────────────────────────────────────────────
-  const [userRole]  = await Role.findOrCreate({ where: { name: 'user'  }, defaults: { name: 'user' }  });
-  const [ownerRole] = await Role.findOrCreate({ where: { name: 'owner' }, defaults: { name: 'owner' } });
-  const [adminRole] = await Role.findOrCreate({ where: { name: 'admin' }, defaults: { name: 'admin' } });
-  logger.info('[Seed] Roles OK');
+  // ── Roles ─────────────────────────────────────────────────────────────────────
+  const [userRole]  = await Role.findOrCreate({ where: { name: UserRole.USER  }, defaults: { name: UserRole.USER  } });
+  const [ownerRole] = await Role.findOrCreate({ where: { name: UserRole.OWNER }, defaults: { name: UserRole.OWNER } });
+  const [adminRole] = await Role.findOrCreate({ where: { name: UserRole.ADMIN }, defaults: { name: UserRole.ADMIN } });
 
-  // ── Sports ───────────────────────────────────────────────────────────────────
-  const sportsData = [
-    { name: 'Cricket',    icon: '🏏' },
-    { name: 'Football',   icon: '⚽' },
-    { name: 'Badminton',  icon: '🏸' },
-    { name: 'Basketball', icon: '🏀' },
-    { name: 'Tennis',     icon: '🎾' },
-    { name: 'Volleyball', icon: '🏐' },
-    { name: 'Kabaddi',    icon: '🤼' },
-    { name: 'Hockey',     icon: '🏑' },
-  ];
-  const sports: Sport[] = [];
-  for (const s of sportsData) {
-    const [sport] = await Sport.findOrCreate({ where: { name: s.name }, defaults: s });
-    sports.push(sport);
-  }
-  logger.info('[Seed] Sports OK');
+  // ── Sports ────────────────────────────────────────────────────────────────────
+  const [cricket]   = await Sport.findOrCreate({ where: { name: 'Cricket'  }, defaults: { name: 'Cricket'  } });
+  const [football]  = await Sport.findOrCreate({ where: { name: 'Football' }, defaults: { name: 'Football' } });
+  const [badminton] = await Sport.findOrCreate({ where: { name: 'Badminton'}, defaults: { name: 'Badminton'} });
 
-  // ── Amenities ────────────────────────────────────────────────────────────────
-  const amenitiesData = [
-    { name: 'Floodlights',      icon: 'Zap'          },
-    { name: 'Parking',          icon: 'ParkingCircle' },
-    { name: 'Changing Rooms',   icon: 'ShowerHead'   },
-    { name: 'Drinking Water',   icon: 'Droplets'     },
-    { name: 'WiFi',             icon: 'Wifi'         },
-    { name: 'Cafeteria',        icon: 'Coffee'       },
-    { name: 'First Aid',        icon: 'Shield'       },
-    { name: 'Equipment Rental', icon: 'Package'      },
-    { name: 'Seating Gallery',  icon: 'Users'        },
-    { name: 'Restrooms',        icon: 'Wind'         },
-    { name: 'Security',         icon: 'Lock'         },
-    { name: 'CCTV',             icon: 'Camera'       },
+  // ── Amenities ─────────────────────────────────────────────────────────────────
+  const amenityDefs = [
+    { name: 'Floodlights',    icon: 'Zap'          },
+    { name: 'Parking',        icon: 'ParkingCircle' },
+    { name: 'Changing Room',  icon: 'ShowerHead'   },
+    { name: 'Drinking Water', icon: 'Droplets'      },
+    { name: 'WiFi',           icon: 'Wifi'          },
+    { name: 'First Aid',      icon: 'Shield'        },
   ];
   const amenities: Amenity[] = [];
-  for (const a of amenitiesData) {
-    const [amenity] = await Amenity.findOrCreate({ where: { name: a.name }, defaults: a });
-    amenities.push(amenity);
+  for (const a of amenityDefs) {
+    const [rec] = await Amenity.findOrCreate({ where: { name: a.name }, defaults: a });
+    amenities.push(rec);
   }
-  logger.info('[Seed] Amenities OK');
 
-  // ── Admin ────────────────────────────────────────────────────────────────────
-  const [admin] = await User.findOrCreate({
+  // ── Admin ─────────────────────────────────────────────────────────────────────
+  await User.findOrCreate({
     where: { email: 'admin@slotplay.in' },
     defaults: {
-      name: 'SlotPlay Admin',
-      email: 'admin@slotplay.in',
+      name: 'SlotPlay Admin', email: 'admin@slotplay.in',
       passwordHash: await hash('Admin@123!'),
-      roleId: adminRole.id,
-      isVerified: true,
-      phone: '9000000001',
+      roleId: adminRole.id, isVerified: true, phone: '9000000001',
     },
   });
-  logger.info('[Seed] Admin created:', admin.email);
 
-  // ── Owners ───────────────────────────────────────────────────────────────────
-  const ownerProfiles = [
-    { name: 'Ravi Kumar',  email: 'ravi@slotplay.in',  phone: '9111111111' },
-    { name: 'Priya Reddy', email: 'priya@slotplay.in', phone: '9222222222' },
-  ];
-  const owners: User[] = [];
-  for (const o of ownerProfiles) {
-    const [owner] = await User.findOrCreate({
-      where: { email: o.email },
-      defaults: { ...o, passwordHash: await hash('Owner@123!'), roleId: ownerRole.id, isVerified: true },
-    });
-    owners.push(owner);
-  }
-  logger.info('[Seed] Owners created');
+  // ── Owners ────────────────────────────────────────────────────────────────────
+  const [owner1] = await User.findOrCreate({
+    where: { email: 'ravi@slotplay.in' },
+    defaults: {
+      name: 'Ravi Kumar', email: 'ravi@slotplay.in',
+      passwordHash: await hash('Owner@123!'),
+      roleId: ownerRole.id, isVerified: true, phone: '9111111111',
+    },
+  });
+  const [owner2] = await User.findOrCreate({
+    where: { email: 'priya@slotplay.in' },
+    defaults: {
+      name: 'Priya Reddy', email: 'priya@slotplay.in',
+      passwordHash: await hash('Owner@123!'),
+      roleId: ownerRole.id, isVerified: true, phone: '9222222222',
+    },
+  });
 
   // ── Players ───────────────────────────────────────────────────────────────────
-  const playerData = [
-    { name: 'Arjun Sharma',  email: 'arjun@example.com',  phone: '9333333331' },
-    { name: 'Meera Nair',    email: 'meera@example.com',   phone: '9333333332' },
-    { name: 'Karan Patel',   email: 'karan@example.com',   phone: '9333333333' },
-    { name: 'Divya Iyer',    email: 'divya@example.com',   phone: '9333333334' },
-    { name: 'Rohit Sinha',   email: 'rohit@example.com',   phone: '9333333335' },
+  const playerDefs = [
+    { name: 'Arjun Sharma', email: 'arjun@example.com', phone: '9333333331' },
+    { name: 'Meera Nair',   email: 'meera@example.com', phone: '9333333332' },
+    { name: 'Karan Patel',  email: 'karan@example.com', phone: '9333333333' },
+    { name: 'Divya Iyer',   email: 'divya@example.com', phone: '9333333334' },
+    { name: 'Rohit Sinha',  email: 'rohit@example.com', phone: '9333333335' },
   ];
   const players: User[] = [];
-  for (const p of playerData) {
-    const [player] = await User.findOrCreate({
+  for (const p of playerDefs) {
+    const [u] = await User.findOrCreate({
       where: { email: p.email },
       defaults: { ...p, passwordHash: await hash('Player@123!'), roleId: userRole.id, isVerified: true },
     });
-    players.push(player);
+    players.push(u);
   }
-  logger.info('[Seed] Players created');
 
-  // ── Venues ───────────────────────────────────────────────────────────────────
-  const venueData = [
-    // Owner 1 (Ravi Kumar) — Hyderabad venues
-    {
-      ownerId: owners[0].id, name: 'Green Field Cricket Turf',
-      description: 'Premium synthetic cricket turf with floodlights. Perfect for evening matches. Professional-grade pitch surface used by local clubs.',
-      address: '42, Jubilee Hills Road No. 36', city: 'Hyderabad', state: 'Telangana', pincode: '500033',
-      latitude: 17.4324, longitude: 78.4071, pricePerHour: 800, phone: '9111111111',
-      sports: ['Cricket'], amenities: ['Floodlights', 'Parking', 'Changing Rooms', 'Drinking Water'],
-    },
-    {
-      ownerId: owners[0].id, name: 'HiTech Football Ground',
-      description: 'Full-size 7-a-side astroturf football ground in the heart of HiTech City. FIFA-approved turf surface, excellent drainage.',
-      address: 'Plot 15, HITEC City Phase 2', city: 'Hyderabad', state: 'Telangana', pincode: '500081',
-      latitude: 17.4486, longitude: 78.3773, pricePerHour: 1200, phone: '9111111111',
-      sports: ['Football'], amenities: ['Floodlights', 'Parking', 'Cafeteria', 'First Aid'],
-    },
-    {
-      ownerId: owners[0].id, name: 'City Sports Complex',
-      description: 'Multi-sport facility offering cricket, football, and badminton. Air-conditioned badminton courts, natural turf cricket ground.',
-      address: '7-1-58, Ameerpet', city: 'Hyderabad', state: 'Telangana', pincode: '500016',
-      latitude: 17.4371, longitude: 78.4483, pricePerHour: 600, phone: '9111111112',
-      sports: ['Cricket', 'Football', 'Badminton'], amenities: ['WiFi', 'Cafeteria', 'Restrooms', 'Security'],
-    },
-    {
-      ownerId: owners[0].id, name: 'Madhapur Premier Turf',
-      description: 'State-of-the-art cricket turf with spring-loaded pitch. Corporate packages available. CCTV monitored 24/7.',
-      address: 'Survey No. 64, Madhapur', city: 'Hyderabad', state: 'Telangana', pincode: '500081',
-      latitude: 17.4504, longitude: 78.3828, pricePerHour: 1000, phone: '9111111113',
-      sports: ['Cricket'], amenities: ['Floodlights', 'CCTV', 'Parking', 'First Aid', 'Equipment Rental'],
-    },
-    {
-      ownerId: owners[0].id, name: 'Gachibowli Arena',
-      description: 'Professional sports arena near the financial district. Multiple courts for badminton and basketball. Rated 4.9 by corporate teams.',
-      address: 'Plot 5, Financial District', city: 'Hyderabad', state: 'Telangana', pincode: '500032',
-      latitude: 17.4126, longitude: 78.3451, pricePerHour: 700, phone: '9111111114',
-      sports: ['Badminton', 'Basketball'], amenities: ['WiFi', 'Parking', 'Drinking Water', 'Seating Gallery'],
-    },
+  logger.info('[Seed] Users OK');
 
-    // Owner 2 (Priya Reddy) — Bangalore venues
+  // ── 5 Tirupati Venues ─────────────────────────────────────────────────────────
+  const venueDefs = [
     {
-      ownerId: owners[1].id, name: 'Koramangala Cricket Hub',
-      description: 'Premium cricket turf in Koramangala. 22-yard professional pitch, T20 format ready. Popular with Bangalore tech teams.',
-      address: '5th Block, Koramangala', city: 'Bangalore', state: 'Karnataka', pincode: '560095',
-      latitude: 12.9352, longitude: 77.6245, pricePerHour: 900, phone: '9222222222',
-      sports: ['Cricket'], amenities: ['Floodlights', 'Parking', 'Cafeteria', 'WiFi'],
+      name: 'Tirumala Cricket Arena',
+      ownerId: owner1.id, sportId: cricket.id,
+      description: 'Synthetic cricket turf near Renigunta Road with floodlights for evening sessions.',
+      address: 'Survey No. 12, Renigunta Road', city: 'Tirupati', state: 'Andhra Pradesh', pincode: '517501',
+      latitude: 13.6288, longitude: 79.4192, pricePerHour: 700, phone: '9222222221',
+      amenityNames: ['Floodlights', 'Parking', 'Drinking Water'],
     },
     {
-      ownerId: owners[1].id, name: 'Indiranagar Football Turf',
-      description: 'FIFA quality astroturf football ground in Indiranagar. 5-a-side and 7-a-side configurations. Very popular on weekends.',
-      address: '100 Feet Road, Indiranagar', city: 'Bangalore', state: 'Karnataka', pincode: '560038',
-      latitude: 12.9716, longitude: 77.6412, pricePerHour: 1400, phone: '9222222223',
-      sports: ['Football'], amenities: ['Floodlights', 'Parking', 'Changing Rooms', 'First Aid'],
+      name: 'SVN Sports Complex',
+      ownerId: owner1.id, sportId: badminton.id,
+      description: 'Multi-sport complex near Sri Venkateswara University with indoor badminton courts.',
+      address: 'SV University Main Gate, Tirupati-Chandragiri Road', city: 'Tirupati', state: 'Andhra Pradesh', pincode: '517502',
+      latitude: 13.6345, longitude: 79.4098, pricePerHour: 500, phone: '9222222222',
+      amenityNames: ['Parking', 'Changing Room', 'Drinking Water'],
     },
     {
-      ownerId: owners[1].id, name: 'Whitefield Sports Center',
-      description: 'Modern sports center with cricket, football, and tennis. Near Whitefield tech park. Corporate tie-ups available.',
-      address: 'ITPL Main Road, Whitefield', city: 'Bangalore', state: 'Karnataka', pincode: '560066',
-      latitude: 12.9698, longitude: 77.7499, pricePerHour: 750, phone: '9222222224',
-      sports: ['Cricket', 'Football', 'Tennis'], amenities: ['WiFi', 'Parking', 'Cafeteria', 'CCTV', 'Security'],
+      name: 'Balaji Football Turf',
+      ownerId: owner2.id, sportId: football.id,
+      description: 'Premium astroturf football ground near Alipiri. Ideal for 5-a-side and 7-a-side matches.',
+      address: 'Near Alipiri Checkpost, Alipiri Road', city: 'Tirupati', state: 'Andhra Pradesh', pincode: '517503',
+      latitude: 13.6520, longitude: 79.4050, pricePerHour: 900, phone: '9222222223',
+      amenityNames: ['Floodlights', 'Parking', 'Changing Room', 'First Aid'],
     },
     {
-      ownerId: owners[1].id, name: 'JP Nagar Badminton Academy',
-      description: 'Professional badminton courts with wooden flooring. Shuttle feeder machines available. Coaching sessions on request.',
-      address: '7th Phase, JP Nagar', city: 'Bangalore', state: 'Karnataka', pincode: '560078',
-      latitude: 12.9063, longitude: 77.5920, pricePerHour: 450, phone: '9222222225',
-      sports: ['Badminton'], amenities: ['WiFi', 'Drinking Water', 'Equipment Rental', 'Restrooms'],
+      name: 'Srinivasa Cricket Ground',
+      ownerId: owner2.id, sportId: cricket.id,
+      description: 'Well-maintained turf near Tirupati Bus Stand. Affordable hourly rates.',
+      address: '14-2, Tilak Road, Near Bus Stand', city: 'Tirupati', state: 'Andhra Pradesh', pincode: '517501',
+      latitude: 13.6380, longitude: 79.4220, pricePerHour: 600, phone: '9222222224',
+      amenityNames: ['Floodlights', 'Drinking Water', 'WiFi'],
     },
     {
-      ownerId: owners[1].id, name: 'Marathahalli Cricket Ground',
-      description: 'Budget-friendly cricket ground near Outer Ring Road. Perfect for club matches and tournaments. Ample parking space.',
-      address: 'Near Tin Factory, Marathahalli', city: 'Bangalore', state: 'Karnataka', pincode: '560037',
-      latitude: 12.9591, longitude: 77.6974, pricePerHour: 550, phone: '9222222226',
-      sports: ['Cricket', 'Football'], amenities: ['Parking', 'Drinking Water', 'Restrooms'],
+      name: 'Padmavathi Badminton Academy',
+      ownerId: owner2.id, sportId: badminton.id,
+      description: 'Professional wooden-floor badminton courts near Padmavathi temple. Equipment available.',
+      address: 'Near Padmavathi Temple, Tiruchanur Road', city: 'Tirupati', state: 'Andhra Pradesh', pincode: '517503',
+      latitude: 13.6210, longitude: 79.4160, pricePerHour: 450, phone: '9222222225',
+      amenityNames: ['Parking', 'Changing Room', 'Drinking Water', 'WiFi'],
     },
   ];
 
-  const createdVenues: Venue[] = [];
-  for (const v of venueData) {
-    const { sports: sportNames, amenities: amenityNames, ...venueFields } = v;
+  const venues: Venue[] = [];
+  for (const v of venueDefs) {
+    const { amenityNames, ...fields } = v;
     const [venue] = await Venue.findOrCreate({
-      where: { name: venueFields.name, ownerId: venueFields.ownerId },
-      defaults: { ...venueFields, isActive: true },
+      where: { name: fields.name, ownerId: fields.ownerId },
+      defaults: { ...fields, status: VenueStatus.ACTIVE, isVerified: true },
     });
-
-    // Associate sports
-    const sportObjs = sports.filter(s => sportNames.includes(s.name));
-    await (venue as any).setSports(sportObjs);
-
-    // Associate amenities
     const amenityObjs = amenities.filter(a => amenityNames.includes(a.name));
     await (venue as any).setAmenities(amenityObjs);
-
-    createdVenues.push(venue);
+    venues.push(venue);
   }
-  logger.info('[Seed] Venues created:', createdVenues.length);
 
-  // ── Slots — generate 7 days × 6AM–10PM for every venue ───────────────────────
-  let slotCount = 0;
-  const createdSlots: Slot[] = [];
+  logger.info('[Seed] Venues OK:', venues.length);
 
-  for (const venue of createdVenues) {
-    for (let day = 0; day < 14; day++) {
-      const baseDate = futureDate(day);
-      const dateStr  = baseDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  // ── Slots — bulk insert ───────────────────────────────────────────────────────
+  // 5 random slots per venue per day for the next 14 days
+  // Available hours: 6 AM – 10 PM (6..21). Pick 5 unique random hours per day.
+  const AVAILABLE_HOURS = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21];
+  const DAYS = 14;
+  const SLOTS_PER_DAY = 5;
 
-      for (let hour = 6; hour < 22; hour++) {
-        const startStr = `${String(hour).padStart(2,'0')}:00`;
-        const endStr   = `${String(hour + 1).padStart(2,'0')}:00`;
+  // Build the full batch, skip ones already in DB
+  const existingSlots = await Slot.findAll({
+    attributes: ['venueId', 'date', 'startTime'],
+    raw: true,
+  });
+  const existingSet = new Set(
+    existingSlots.map((s: any) => `${s.venueId}|${s.date}|${s.startTime}`),
+  );
 
-        const [slot, created] = await Slot.findOrCreate({
-          where: { venueId: venue.id, date: dateStr, startTime: startStr },
-          defaults: {
-            venueId:   venue.id,
-            date:      dateStr,
-            startTime: startStr,
-            endTime:   endStr,
-            price:     venue.pricePerHour,
-            status:    'available',
-          },
+  const slotRows: object[] = [];
+  for (const venue of venues) {
+    for (let d = 0; d < DAYS; d++) {
+      const day = dateStr(d);
+      const hours = pickRandom(AVAILABLE_HOURS, SLOTS_PER_DAY).sort((a, b) => a - b);
+      for (const hour of hours) {
+        const start = hhmm(hour);
+        const key   = `${venue.id}|${day}|${start}`;
+        if (existingSet.has(key)) continue;
+        slotRows.push({
+          id:        uuidv4(),
+          venueId:   venue.id,
+          date:      day,
+          startTime: start,
+          endTime:   hhmm(hour + 1),
+          price:     venue.pricePerHour,
+          status:    SlotStatus.AVAILABLE,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
-        if (created) { createdSlots.push(slot); slotCount++; }
       }
     }
   }
-  logger.info('[Seed] Slots created:', slotCount);
 
-  // ── Bookings — 20 realistic bookings ──────────────────────────────────────────
-  function randomItem<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
+  if (slotRows.length > 0) {
+    await Slot.bulkCreate(slotRows as any[], { ignoreDuplicates: true });
+    logger.info(`[Seed] Slots bulk inserted: ${slotRows.length}`);
+  } else {
+    logger.info('[Seed] Slots already exist — skipped');
+  }
 
-  const bookingStatuses = [
-    'confirmed', 'confirmed', 'confirmed', 'confirmed',
-    'pending_payment', 'pending_payment',
-    'rejected', 'cancelled',
+  // ── Sample bookings (3 confirmed, 2 pending) ──────────────────────────────────
+  const allSlots = await Slot.findAll({ limit: 10, order: [['createdAt', 'ASC']] });
+
+  const bookingDefs = [
+    { slot: allSlots[0], player: players[0], status: BookingStatus.CONFIRMED },
+    { slot: allSlots[1], player: players[1], status: BookingStatus.CONFIRMED },
+    { slot: allSlots[2], player: players[2], status: BookingStatus.CONFIRMED },
+    { slot: allSlots[3], player: players[3], status: BookingStatus.PENDING_PAYMENT },
+    { slot: allSlots[4], player: players[4], status: BookingStatus.PENDING_PAYMENT },
   ];
 
-  const bookingRefs: string[] = [];
   const createdBookings: Booking[] = [];
-
-  // Pick 20 different slots spread across venues
-  const bookingSlots = createdSlots
-    .filter(s => new Date(`${s.date}T${s.startTime}`) > new Date()) // only future slots
-    .slice(0, 30)
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 20);
-
-  for (let i = 0; i < bookingSlots.length; i++) {
-    const slot   = bookingSlots[i];
-    const player = players[i % players.length];
-    const status = bookingStatuses[i % bookingStatuses.length] as any;
-    const ref    = `SP-${Date.now().toString(36).toUpperCase()}-${String(i).padStart(3,'0')}`;
-
+  for (const bd of bookingDefs) {
+    if (!bd.slot) continue;
     const [booking] = await Booking.findOrCreate({
-      where: { slotId: slot.id },
+      where: { slotId: bd.slot.id },
       defaults: {
-        userId: player.id,
-        slotId: slot.id,
-        venueId: slot.venueId,
-        bookingRef: ref,
-        status,
-        totalAmount: slot.price,
+        userId:      bd.player.id,
+        slotId:      bd.slot.id,
+        venueId:     bd.slot.venueId,
+        bookingRef:  `SP-${Date.now().toString(36).toUpperCase()}`,
+        status:      bd.status,
+        totalAmount: bd.slot.price,
       },
     });
-
-    // Create payment record
     await Payment.findOrCreate({
       where: { bookingId: booking.id },
       defaults: {
         bookingId: booking.id,
-        amount: slot.pricePerHour,
-        currency: 'INR',
-        method: 'upi',
-        status: status === 'confirmed' ? 'verified' : status === 'pending_payment' ? 'submitted' : 'rejected',
+        userId:    bd.player.id,
+        amount:    bd.slot.price,
+        currency:  'INR',
+        method:    PaymentMethod.UPI_MANUAL,
+        status:    bd.status === BookingStatus.CONFIRMED
+          ? PaymentStatus.VERIFIED
+          : PaymentStatus.PENDING,
       },
     });
-
-    bookingRefs.push(ref);
     createdBookings.push(booking);
   }
-  logger.info('[Seed] Bookings created:', createdBookings.length);
 
-  // ── Reviews — for confirmed bookings ──────────────────────────────────────────
-  const confirmedBookings = createdBookings.filter(b => b.status === 'confirmed');
+  logger.info('[Seed] Bookings OK:', createdBookings.length);
+
+  // ── Reviews for confirmed bookings ────────────────────────────────────────────
   const reviewTexts = [
-    'Great turf, excellent surface quality. Will definitely book again!',
+    'Great turf, excellent surface. Will definitely book again!',
     'Perfect lighting for evening matches. Highly recommended.',
-    'Good facility but parking can be tight on weekends.',
-    'Amazing experience! The turf is top-notch and staff very friendly.',
     'Clean and well-maintained. Booking was super easy.',
-    'Nice location, easy to reach. The turf quality is very good.',
-    'Excellent floodlights and facilities. Our team loves this place.',
-    'Value for money. The app made booking so convenient.',
   ];
-
-  for (let i = 0; i < confirmedBookings.length && i < 15; i++) {
+  const confirmedBookings = createdBookings.filter(b => b.status === BookingStatus.CONFIRMED);
+  for (let i = 0; i < confirmedBookings.length; i++) {
     const b = confirmedBookings[i];
     await Review.findOrCreate({
-      where: { userId: b.userId, venueId: b.venueId },
+      where: { bookingId: b.id },
       defaults: {
-        userId: b.userId,
-        venueId: b.venueId,
-        rating: Math.floor(Math.random() * 2) + 4, // 4 or 5
-        comment: reviewTexts[i % reviewTexts.length],
+        userId:    b.userId,
+        venueId:   b.venueId,
+        bookingId: b.id,
+        rating:    5,
+        comment:   reviewTexts[i % reviewTexts.length],
       },
     });
   }
-  logger.info('[Seed] Reviews created');
 
   // ── Notifications ─────────────────────────────────────────────────────────────
-  const notifTemplates = [
-    { type: 'booking_confirmed', title: 'Booking Confirmed! ✅', body: 'Your slot has been confirmed. Check your QR ticket.' },
-    { type: 'payment_submitted', title: 'Payment Submitted ⏳', body: 'Payment screenshot received. Awaiting owner verification.' },
-    { type: 'payment_rejected',  title: 'Payment Not Verified ❌', body: 'Your payment could not be verified. Please retry with a clear screenshot.' },
-  ];
-
   for (const player of players) {
-    for (const tmpl of notifTemplates) {
-      await Notification.findOrCreate({
-        where: { userId: player.id, type: tmpl.type },
-        defaults: { userId: player.id, ...tmpl, isRead: false },
-      });
-    }
+    await Notification.findOrCreate({
+      where: { userId: player.id, type: NotificationType.BOOKING_CONFIRMED },
+      defaults: {
+        userId: player.id,
+        type:   NotificationType.BOOKING_CONFIRMED,
+        title:  'Welcome to SlotPlay! 🎉',
+        body:   'Browse and book your favourite sports venues in Tirupati.',
+        isRead: false,
+      },
+    });
   }
-  logger.info('[Seed] Notifications created');
 
-  // ── Summary ───────────────────────────────────────────────────────────────────
-  logger.info('[Seed] ✅ All done!');
+  logger.info('[Seed] Done!');
+
   console.log('\n================================');
-  console.log('  SlotPlay Database Seeded ✅');
+  console.log('  SlotPlay Seed Complete ✅');
   console.log('================================');
-  console.log(`  Admin:    admin@slotplay.in / Admin@123!`);
-  console.log(`  Owner 1:  ravi@slotplay.in  / Owner@123!`);
-  console.log(`  Owner 2:  priya@slotplay.in / Owner@123!`);
-  console.log(`  Player:   arjun@example.com / Player@123!`);
-  console.log(`  Venues:   ${createdVenues.length}`);
-  console.log(`  Slots:    ${slotCount}`);
-  console.log(`  Bookings: ${createdBookings.length}`);
+  console.log('  Admin:    admin@slotplay.in  / Admin@123!');
+  console.log('  Owner 1:  ravi@slotplay.in   / Owner@123!');
+  console.log('  Owner 2:  priya@slotplay.in  / Owner@123!');
+  console.log('  Player:   arjun@example.com  / Player@123!');
+  console.log(`  Venues:   ${venues.length} (all Tirupati)`);
+  console.log(`  Slots:    ${slotRows.length} bulk inserted`);
   console.log('================================\n');
 
   await sequelize.close();
 }
 
 seed().catch(err => {
-  console.error('[Seed] Fatal error:', err);
+  console.error('[Seed] Fatal:', err);
   process.exit(1);
 });
