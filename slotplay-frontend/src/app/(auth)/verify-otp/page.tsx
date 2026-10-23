@@ -18,7 +18,8 @@ import { useAuthStore } from '@/store/authStore';
 export default function VerifyOtpPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const email = searchParams.get('email') ?? '';
+  const emailParam = searchParams.get('email') ?? '';
+  const [email, setEmail] = useState(emailParam);
   const { setUser } = useAuthStore();
 
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
@@ -27,6 +28,20 @@ export default function VerifyOtpPage() {
   const [countdown, setCountdown] = useState(60);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (emailParam) {
+      setEmail(emailParam);
+      try {
+        sessionStorage.setItem('slotplay_verify_email', emailParam);
+      } catch {}
+    } else {
+      try {
+        const stored = sessionStorage.getItem('slotplay_verify_email');
+        if (stored) setEmail(stored);
+      } catch {}
+    }
+  }, [emailParam]);
 
   // Countdown timer for resend
   useEffect(() => {
@@ -69,11 +84,18 @@ export default function VerifyOtpPage() {
 
   const handleVerify = async (code: string) => {
     if (code.length !== 6) return;
+    if (!email || !email.trim()) {
+      toast.error('Please enter your registered email address.');
+      return;
+    }
     setIsVerifying(true);
     try {
-      const user = await verifyOtp(code);
+      const user = await verifyOtp(code, email.trim());
       setUser(user);
       toast.success('Email verified! Welcome to SlotPlay.');
+      try {
+        sessionStorage.removeItem('slotplay_verify_email');
+      } catch {}
       router.push('/dashboard');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Invalid code. Please try again.';
@@ -113,10 +135,20 @@ export default function VerifyOtpPage() {
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
         We sent a 6-digit code to
       </p>
-      {email && (
+      {email ? (
         <p className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-8">
           {email}
         </p>
+      ) : (
+        <div className="mb-6 max-w-xs mx-auto">
+          <input
+            type="email"
+            placeholder="Enter your registered email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 text-sm border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+        </div>
       )}
 
       {/* OTP Input Grid */}

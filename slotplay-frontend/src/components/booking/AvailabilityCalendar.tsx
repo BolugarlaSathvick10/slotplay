@@ -14,6 +14,8 @@ import { useCreateBooking } from '@/hooks/useBooking';
 import { useAuth } from '@/hooks/useAuth';
 import { Clock, Lock, Check, AlertCircle, RefreshCw, Zap } from 'lucide-react';
 
+import { formatTime } from '@/lib/utils';
+
 interface AvailabilityCalendarProps {
   venueId: string;
   pricePerHour: number;
@@ -26,7 +28,12 @@ function fmt(iso: string | Date, opts: Intl.DateTimeFormatOptions) {
 }
 
 function fmtTime(slot: any) {
-  // API returns startDateTime (ISO) or fall back to constructing from date + startTime
+  if (slot.startTime && slot.endTime) {
+    return {
+      start: formatTime(slot.startTime),
+      end:   formatTime(slot.endTime),
+    };
+  }
   const start = slot.startDateTime
     ? new Date(slot.startDateTime)
     : new Date(`${slot.date}T${slot.startTime}:00`);
@@ -40,13 +47,17 @@ function fmtTime(slot: any) {
 }
 
 function dateKey(d: Date) {
-  return d.toISOString().split('T')[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: AvailabilityCalendarProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuth();
   const createBooking = useCreateBooking();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── Date selection ──────────────────────────────────────────
   const today = new Date();
@@ -76,6 +87,8 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
   const selectedSlot = (slots as any[]).find((s: any) => s.id === selectedSlotId);
 
   const handleBook = async () => {
+    if (isSubmitting || createBooking.isPending) return;
+
     if (!isAuthenticated) {
       router.push(`/login?returnUrl=/venues/${venueId}`);
       return;
@@ -85,27 +98,28 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
     // Validate the slot is still available right before booking
     const fresh = (slots as any[]).find((s: any) => s.id === selectedSlotId);
     if (!fresh || !fresh.isAvailable) {
-      alert('This slot was just taken. Please choose another.');
+      alert('This slot is no longer available. Please choose another.');
       setSelectedSlotId(null);
       refetch();
       return;
     }
 
+    setIsSubmitting(true);
     let booking;
     try {
       booking = await createBooking.mutateAsync({
         slotId: selectedSlotId,
         venueId,
       });
+      // Redirect to checkout with booking context
+      router.push(
+        `/bookings/checkout?bookingId=${booking.id}&venueId=${venueId}&slotId=${selectedSlotId}&date=${dateKey(selectedDate)}`
+      );
     } catch {
       // onError in useCreateBooking already shows a toast — nothing more to do here
-      return;
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Redirect to checkout with booking context
-    router.push(
-      `/bookings/checkout?bookingId=${booking.id}&venueId=${venueId}&slotId=${selectedSlotId}&date=${dateKey(selectedDate)}`
-    );
   };
 
   const available = (slots as any[]).filter((s: any) => s.isAvailable).length;
@@ -190,8 +204,19 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
           <div className="grid grid-cols-2 gap-2">
             {(slots as any[]).map((slot: any) => {
               const isSelected  = selectedSlotId === slot.id;
-              const slotStart   = slot.startDateTime ? new Date(slot.startDateTime) : new Date(`${slot.date}T${slot.startTime}:00`);
-              const isPast      = slotStart < new Date();
+              const isSelectedDateToday = dateKey(selectedDate) === dateKey(today);
+              let isPast = false;
+              if (dateKey(selectedDate) < dateKey(today)) {
+                isPast = true;
+              } else if (isSelectedDateToday && slot.startTime) {
+                const [h, m] = slot.startTime.split(':').map(Number);
+                const now = new Date();
+                const slotDateObj = new Date(selectedDate);
+                slotDateObj.setHours(h, m || 0, 0, 0);
+                isPast = slotDateObj < now;
+              }
+
+              const slotPrice = slot.pricePerHour ?? slot.price;
 
               return (
                 <button
@@ -226,7 +251,7 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
                   </p>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-gray-900 dark:text-white">₹{slot.pricePerHour}</span>
+                    <span className="text-xs font-bold text-gray-900 dark:text-white">₹{slotPrice}</span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                       isPast
                         ? 'text-gray-400'
@@ -257,7 +282,7 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500 dark:text-gray-400">Total</span>
-                  <span className="font-black text-brand-700 dark:text-brand-300 text-base">₹{selectedSlot.pricePerHour}</span>
+                  <span className="font-black text-brand-700 dark:text-brand-300 text-base">₹{selectedSlot.pricePerHour ?? selectedSlot.price}</span>
                 </div>
               </div>
 
@@ -270,11 +295,11 @@ export function AvailabilityCalendar({ venueId, pricePerHour, ownerUpiId }: Avai
 
               <button
                 onClick={handleBook}
-                disabled={createBooking.isPending}
+                disabled={isSubmitting || createBooking.isPending}
                 className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-bold py-3.5 rounded-xl transition-colors shadow-sm"
               >
                 <Zap size={16} />
-                {createBooking.isPending
+                {isSubmitting || createBooking.isPending
                   ? 'Creating booking…'
                   : isAuthenticated
                     ? 'Book this slot'

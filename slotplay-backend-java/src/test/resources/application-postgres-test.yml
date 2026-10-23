@@ -1,0 +1,44 @@
+# Configuration for isolated PostgreSQL integration tests.
+# REQUIRED ENVIRONMENT VARIABLES:
+#   TEST_POSTGRES_URL:       e.g., jdbc:postgresql://localhost:5432/slotplay_test?sslmode=disable
+#                            or postgres://user:pass@host:5432/slotplay_test?sslmode=require
+#                            CRITICAL: Database name must contain 'test'. Production URLs are rejected.
+#   TEST_POSTGRES_USER:      Test database username (e.g., postgres)
+#   TEST_POSTGRES_PASSWORD:  Test database password
+#   ALLOW_POSTGRES_TEST:     Must be explicitly set to 'true' to permit migration execution.
+spring:
+  datasource:
+    url: ${TEST_POSTGRES_URL:jdbc:postgresql://localhost:5432/slotplay_test}
+    username: ${TEST_POSTGRES_USER:postgres}
+    password: ${TEST_POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        stringtype: unspecified
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
+    clean-disabled: true
+
+slotplay:
+  cors:
+    allowed-origin: http://localhost:3000
+  session:
+    cookie-name: slotplay.sid
+    max-age-ms: 604800000
+    secret: test-session-secret-for-isolated-unit-tests-only
+  storage:
+    provider: local
+    upload-dir: test-uploads
+  mail:
+    from: ${EMAIL_FROM:${RESEND_FROM_EMAIL:SlotPlay <slotplay@nmart.me>}}
+  resend:
+    api-key: ${RESEND_API_KEY:}

@@ -19,16 +19,19 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     Accept: 'application/json',
   },
-  timeout: 15_000,
+  timeout: 30_000,
 });
 
 // ── Response interceptor — normalise errors ───────────────────────────────────
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiError>) => {
-    // 401 = unauthenticated — expected when no session exists, not an error
-    // Return a resolved null so callers like getCurrentUser() get null back cleanly
-    if (error.response?.status === 401) {
+    // 401 on /api/auth/me = unauthenticated session check, resolve cleanly as null
+    // All other 401s (such as invalid login credentials) should reject with the backend error message
+    if (
+      error.response?.status === 401 &&
+      error.config?.url?.includes('/api/auth/me')
+    ) {
       return Promise.resolve({ data: { success: false, data: null } });
     }
 

@@ -44,8 +44,12 @@ export function useAuth() {
   const login = useCallback(
     async (payload: LoginPayload, returnUrl?: string) => {
       const user = await loginUser(payload);
+      if (!user) {
+        throw new Error('Login failed: invalid response from server');
+      }
       setUser(user);
-      toast.success(`Welcome back, ${user.name.split(' ')[0]}!`);
+      const displayName = user.name ? user.name.split(' ')[0] : 'there';
+      toast.success(`Welcome back, ${displayName}!`);
       router.push(returnUrl ?? '/dashboard');
     },
     [setUser, router],
@@ -56,6 +60,9 @@ export function useAuth() {
     async (payload: RegisterPayload) => {
       await registerUser(payload);
       toast.success('Account created! Check your email for a verification code.');
+      try {
+        sessionStorage.setItem('slotplay_verify_email', payload.email);
+      } catch {}
       // After register, navigate to OTP page
       router.push(`/verify-otp?email=${encodeURIComponent(payload.email)}`);
     },

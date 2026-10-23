@@ -34,6 +34,7 @@ export interface User {
   email: string;
   phone?: string;
   roleId: number;
+  role?: string;
   isVerified: boolean;
   avatarUrl?: string;
   createdAt: string;
@@ -71,6 +72,7 @@ export interface Venue {
   pricePerHour: number;
   phone: string;
   isActive: boolean;
+  status?: string;
   averageRating?: number | string;
   reviewCount?: number;
   distance?: string;
@@ -194,3 +196,21 @@ export interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
 }
+
+export interface OwnerStats {
+  totalBookings: number;
+  confirmedBookings: number;
+  pendingPayments: number;
+  totalRevenue: number;
+  totalVenues: number;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalVenues: number;
+  totalBookings: number;
+  confirmedBookings: number;
+  pendingVerifications: number;
+  totalRevenue: number;
+}
+

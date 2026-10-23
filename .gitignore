@@ -13,8 +13,15 @@ build/
 .env.local
 .env.*.local
 
+# Java / Maven build outputs
+target/
+*.class
+.mvn/wrapper/maven-wrapper.jar
+
 # Uploads directory (user-generated content)
-slotplay-backend/uploads/
+uploads/
+slotplay-backend-java/uploads/
+slotplay-backend-java/test-uploads/
 
 # Logs
 *.log

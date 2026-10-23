@@ -5,7 +5,7 @@
  */
 
 import api from './api';
-import { ApiSuccess, Booking } from '@/types';
+import { ApiSuccess, Booking, OwnerStats, AdminStats } from '@/types';
 
 export interface CreateBookingPayload {
   slotId: string;
@@ -114,3 +114,63 @@ export async function getPendingVerifications(page: number = 1, limit: number = 
   
   return data.data;
 }
+
+// ── Owner bookings & stats ────────────────────────────────────────────────────
+
+export async function getOwnerBookings(
+  page: number = 1,
+  limit: number = 20,
+  status?: string
+) {
+  const params = new URLSearchParams();
+  params.append('page', page.toString());
+  params.append('limit', limit.toString());
+  if (status) params.append('status', status);
+
+  const { data } = await api.get<ApiSuccess<{
+    data: Booking[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+  }>>(`/api/owner/bookings?${params.toString()}`);
+
+  return data.data;
+}
+
+export async function getOwnerStats() {
+  const { data } = await api.get<ApiSuccess<OwnerStats>>('/api/owner/stats');
+  return data.data;
+}
+
+// ── Admin bookings, verifications & stats ─────────────────────────────────────
+
+export async function getAdminBookings(
+  page: number = 1,
+  limit: number = 20,
+  status?: string
+) {
+  const params = new URLSearchParams();
+  params.append('page', page.toString());
+  params.append('limit', limit.toString());
+  if (status) params.append('status', status);
+
+  const { data } = await api.get<ApiSuccess<{
+    data: Booking[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+  }>>(`/api/admin/bookings?${params.toString()}`);
+
+  return data.data;
+}
+
+export async function getAdminPendingVerifications(page: number = 1, limit: number = 20) {
+  const { data } = await api.get<ApiSuccess<{
+    data: any[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+  }>>(`/api/admin/verifications?page=${page}&limit=${limit}`);
+
+  return data.data;
+}
+
+export async function getAdminStats() {
+  const { data } = await api.get<ApiSuccess<AdminStats>>('/api/admin/stats');
+  return data.data;
+}
+

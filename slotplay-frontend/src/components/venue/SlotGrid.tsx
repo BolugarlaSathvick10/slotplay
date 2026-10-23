@@ -7,6 +7,8 @@
 import { SlotResponse } from '@/lib/venue';
 import { Check, Lock } from 'lucide-react';
 
+import { formatTime } from '@/lib/utils';
+
 interface SlotGridProps {
   slots: SlotResponse[];
   selectedSlotId?: string;
@@ -44,16 +46,13 @@ export function SlotGrid({
     );
   }
 
-  const formatTime = (slot: any, field: 'start' | 'end') => {
+  const formatSlotTime = (slot: any, field: 'start' | 'end') => {
     const timeStr = field === 'start' ? slot.startTime : slot.endTime;
-    const dateStr = slot.date;
-    // If we have a pre-combined ISO datetime, use it; otherwise construct from parts
-    const isoSrc  = field === 'start' ? slot.startDateTime : slot.endDateTime;
-    const d = isoSrc
-      ? new Date(isoSrc)
-      : dateStr
-        ? new Date(`${dateStr}T${timeStr}:00`)
-        : new Date();
+    if (timeStr) {
+      return formatTime(timeStr);
+    }
+    const isoSrc = field === 'start' ? slot.startDateTime : slot.endDateTime;
+    const d = isoSrc ? new Date(isoSrc) : new Date();
     return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   };
 
@@ -73,10 +72,10 @@ export function SlotGrid({
           }`}
         >
           <div className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
-            {formatTime(slot, 'start')}
+            {formatSlotTime(slot, 'start')}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-            ₹{slot.pricePerHour}
+            ₹{slot.pricePerHour ?? (slot as any).price}
           </div>
           <div className={`text-xs font-medium flex items-center gap-1 ${
             slot.isAvailable

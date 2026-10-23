@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/slotplay}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+  jpa:
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    com.slotplay: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+
+slotplay:
+  mail:
+    from: ${EMAIL_FROM:${RESEND_FROM_EMAIL:SlotPlay <slotplay@nmart.me>}}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+

@@ -38,6 +38,9 @@ export async function registerUser(payload: RegisterPayload) {
 
 export async function loginUser(payload: LoginPayload) {
   const { data } = await api.post<ApiSuccess<User>>('/api/auth/login', payload);
+  if (!data?.data) {
+    throw new Error(data?.message || 'Login failed. Please check your credentials.');
+  }
   return data.data;
 }
 
@@ -49,15 +52,22 @@ export async function getCurrentUser(): Promise<User | null> {
   try {
     const { data } = await api.get<ApiSuccess<User>>('/api/auth/me');
     // data.success is false when interceptor resolved a 401 as null
-    if (!data.success) return null;
+    if (!data?.success) return null;
     return data.data;
   } catch {
     return null;
   }
 }
 
-export async function verifyOtp(otpCode: string) {
-  const { data } = await api.post<ApiSuccess<User>>('/api/auth/verify-otp', { otpCode });
+export async function verifyOtp(otpCode: string, email?: string) {
+  const payload =
+    email && email.trim()
+      ? { otpCode: otpCode.trim(), email: email.trim() }
+      : { otpCode: otpCode.trim() };
+  const { data } = await api.post<ApiSuccess<User>>('/api/auth/verify-otp', payload);
+  if (!data?.data) {
+    throw new Error(data?.message || 'Verification failed. Please check the code.');
+  }
   return data.data;
 }
 

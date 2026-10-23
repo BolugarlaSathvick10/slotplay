@@ -100,8 +100,17 @@ export default function DashboardBookingsPage() {
                     <span className="font-mono">{b.bookingRef}</span>
                     {slot && (
                       <span className="flex items-center gap-1">
-                        <Calendar size={11} />
-                        {new Date(slot.date || slot.startTime).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {new Date(slot.date ? slot.date + 'T00:00:00' : slot.startTime).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                        {slot.startTime && (
+                          <span className="font-semibold text-gray-500">
+                            {' '}· {slot.startTime.slice(0, 5)}
+                            {slot.endTime ? `–${slot.endTime.slice(0, 5)}` : ''}
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>

@@ -19,7 +19,7 @@ export default function VerificationsPage() {
   const items = data?.data ?? [];
 
   const approve = async (bookingId: string) => {
-    if (!confirm('Approve this payment?')) return;
+    if (!confirm('Confirm payment and book this slot? The QR ticket will be generated immediately for the user.')) return;
     await verify.mutateAsync({ bookingId, approved: true });
   };
   const reject = async () => {
@@ -79,10 +79,29 @@ export default function VerificationsPage() {
                   )}
                 </div>
 
-                {pv?.screenshotUrl ? (
+                {pv?.screenshotUrl && !pv.screenshotUrl.includes('undefined') && pv.screenshotUrl !== 'DIRECT_CONFIRMATION' ? (
                   <div className="relative h-44 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                    <Image src={pv.screenshotUrl} alt="Payment screenshot" fill className="object-contain" />
-                    <a href={pv.screenshotUrl} target="_blank" rel="noopener noreferrer" className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black">
+                    <Image
+                      src={
+                        pv.screenshotUrl.startsWith('http')
+                          ? pv.screenshotUrl
+                          : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}${pv.screenshotUrl.startsWith('/') ? '' : '/'}${pv.screenshotUrl}`
+                      }
+                      alt="Payment screenshot"
+                      fill
+                      className="object-contain"
+                      unoptimized
+                    />
+                    <a
+                      href={
+                        pv.screenshotUrl.startsWith('http')
+                          ? pv.screenshotUrl
+                          : `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}${pv.screenshotUrl.startsWith('/') ? '' : '/'}${pv.screenshotUrl}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="absolute top-2 right-2 bg-black/50 text-white p-1.5 rounded-full hover:bg-black"
+                    >
                       <ExternalLink size={13} />
                     </a>
                   </div>
@@ -93,7 +112,7 @@ export default function VerificationsPage() {
 
               <div className="px-5 py-4 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex gap-3">
                 <button onClick={() => approve(b.id)} disabled={verify.isPending} className="flex-1 flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-bold py-2.5 rounded-xl transition-colors">
-                  <Check size={16} /> Approve
+                  <Check size={16} /> Confirm Payment & Book Slot
                 </button>
                 <button onClick={() => setModal({ bookingId: b.id })} disabled={verify.isPending} className="flex-1 flex items-center justify-center gap-2 border-2 border-red-400 text-red-600 dark:text-red-400 font-bold py-2.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                   <X size={16} /> Reject

@@ -29,20 +29,23 @@ const USER_NAV = [
 
 const OWNER_NAV = [
   { label: 'Overview',        href: '/dashboard',            icon: LayoutDashboard },
-  { label: 'Profile',         href: '/dashboard/profile',     icon: User },
-  { label: 'My Bookings',     href: '/dashboard/bookings',    icon: CalendarCheck },
-  { label: 'Notifications',    href: '/notifications',          icon: Bell },
+  { label: 'Turf Bookings',   href: '/owner/bookings',       icon: CalendarCheck },
+  { label: 'Verify Payments', href: '/owner/verifications',   icon: BarChart2 },
   { label: 'My Venues',       href: '/owner/venues',          icon: MapPin },
   { label: 'Add Venue',       href: '/owner/venues/new',      icon: PlusSquare },
   { label: 'Manage Slots',    href: '/owner/slots',           icon: Clock },
-  { label: 'Verify Payments', href: '/owner/verifications',   icon: BarChart2 },
+  { label: 'Profile',         href: '/dashboard/profile',     icon: User },
+  { label: 'Notifications',   href: '/notifications',         icon: Bell },
 ];
 
 const ADMIN_NAV = [
-  { label: 'Overview',    href: '/dashboard',      icon: LayoutDashboard },
-  { label: 'Users',       href: '/admin/users',    icon: Users },
-  { label: 'Venues',      href: '/admin/venues',   icon: MapPin },
-  { label: 'Reports',     href: '/admin/reports',  icon: BarChart2 },
+  { label: 'Overview',        href: '/dashboard',            icon: LayoutDashboard },
+  { label: 'All Bookings',    href: '/admin/bookings',       icon: CalendarCheck },
+  { label: 'Verify Payments', href: '/admin/verifications',   icon: Shield },
+  { label: 'Users',           href: '/admin/users',          icon: Users },
+  { label: 'Venues',          href: '/admin/venues',         icon: MapPin },
+  { label: 'Reports',         href: '/admin/reports',        icon: BarChart2 },
+  { label: 'Notifications',   href: '/notifications',         icon: Bell },
 ];
 
 function NavItem({ href, icon: Icon, label }: { href: string; icon: any; label: string }) {
@@ -65,29 +68,20 @@ function NavItem({ href, icon: Icon, label }: { href: string; icon: any; label: 
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout, isLoading } = useAuth();
-  const router = useRouter();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  // Auth guard
-  useEffect(() => {
-    if (!isLoading && !user) router.replace('/login?returnUrl=/dashboard');
-  }, [user, isLoading, router]);
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
-        <div className="w-7 h-7 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const isOwner = user.roleId === 2;
-  const isAdmin = user.roleId === 3;
-  const navItems = isAdmin ? ADMIN_NAV : isOwner ? OWNER_NAV : USER_NAV;
-
-  const Sidebar = () => (
+function Sidebar({
+  user,
+  isAdmin,
+  isOwner,
+  navItems,
+  logout,
+}: {
+  user: any;
+  isAdmin: boolean;
+  isOwner: boolean;
+  navItems: any[];
+  logout: () => void;
+}) {
+  return (
     <nav className="flex flex-col h-full">
       {/* Logo */}
       <div className="px-4 py-5 border-b border-gray-100 dark:border-gray-800 mb-4">
@@ -133,13 +127,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     </nav>
   );
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, logout, isLoading } = useAuth();
+  const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Auth guard
+  useEffect(() => {
+    if (!isLoading && !user) router.replace('/login?returnUrl=/dashboard');
+  }, [user, isLoading, router]);
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
+        <div className="w-7 h-7 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const isOwner = user.roleId === 2 || user.role?.toLowerCase() === 'owner';
+  const isAdmin = user.roleId === 3 || user.role?.toLowerCase() === 'admin';
+  const navItems = isAdmin ? ADMIN_NAV : isOwner ? OWNER_NAV : USER_NAV;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex">
 
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex flex-col w-60 flex-shrink-0 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 fixed inset-y-0 left-0 z-30">
-        <Sidebar />
+        <Sidebar user={user} isAdmin={isAdmin} isOwner={isOwner} navItems={navItems} logout={logout} />
       </aside>
 
       {/* Mobile sidebar drawer */}
@@ -152,7 +171,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button onClick={() => setSidebarOpen(false)}><X size={18} className="text-gray-500" /></button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <Sidebar />
+              <Sidebar user={user} isAdmin={isAdmin} isOwner={isOwner} navItems={navItems} logout={logout} />
             </div>
           </aside>
         </>
@@ -167,14 +186,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Menu size={20} />
           </button>
 
-          {/* Breadcrumb area — filled by page via portal or title */}
+          {/* Breadcrumb area */}
           <div className="flex-1" />
 
           {/* Right side */}
-          <div className="flex items-center gap-2">
-            <button className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
-              <Bell size={18} />
-            </button>
+          <div className="flex items-center gap-3">
+            <NotificationBell />
             <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-white font-bold text-sm">
               {user.name?.[0]?.toUpperCase()}
             </div>

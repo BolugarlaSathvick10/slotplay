@@ -27,12 +27,13 @@ export function useVenueDetail(venueId: string | null) {
 }
 
 export function useVenueSlots(venueId: string | null, date: Date | null) {
+  const dateKey = date ? venueApi.formatDateLocal(date) : null;
   return useQuery({
-    queryKey: ['venue-slots', venueId, date?.toISOString().split('T')[0]],
+    queryKey: ['venue-slots', venueId, dateKey],
     queryFn: () =>
       venueId && date ? venueApi.getVenueSlots(venueId, date) : null,
     enabled: !!venueId && !!date,
-    staleTime: 2 * 60 * 1000, // 2 minutes (slots update frequently)
+    staleTime: 30 * 1000, // 30 seconds
   });
 }
 

@@ -39,20 +39,28 @@ export function useSubmitPayment() {
   });
 }
 
-export function useListBookings(page: number = 1, status?: string) {
+interface QueryOptions {
+  enabled?: boolean;
+  refetchInterval?: number | false;
+}
+
+export function useListBookings(page: number = 1, status?: string, options?: QueryOptions) {
   return useQuery({
     queryKey: ['bookings', page, status],
     queryFn: () => bookingApi.listBookings(page, 10, status),
-    staleTime: 30 * 1000, // 30 seconds
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
-export function useBookingDetail(bookingId: string | null) {
+export function useBookingDetail(bookingId: string | null, options?: QueryOptions) {
   return useQuery({
     queryKey: ['booking', bookingId],
     queryFn: () => (bookingId ? bookingApi.getBooking(bookingId) : null),
-    enabled: !!bookingId,
-    staleTime: 1 * 60 * 1000, // 1 minute
+    enabled: (options?.enabled ?? true) && !!bookingId,
+    staleTime: 15 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   });
 }
 
@@ -79,11 +87,18 @@ export function useVerifyPayment() {
     onSuccess: (data, variables) => {
       toast.success(
         variables.approved
-          ? 'Payment verified!'
+          ? 'Payment confirmed! Slot is booked and QR code generated.'
           : 'Payment rejected. User notified.'
       );
       queryClient.invalidateQueries({ queryKey: ['verifications'] });
+      queryClient.invalidateQueries({ queryKey: ['owner-verifications'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-verifications'] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['owner-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['owner-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['booking'] });
     },
     onError: (err: any) => {
       toast.error(err.message || 'Failed to verify payment');
@@ -91,10 +106,63 @@ export function useVerifyPayment() {
   });
 }
 
-export function usePendingVerifications(page: number = 1) {
+export function usePendingVerifications(page: number = 1, options?: QueryOptions) {
   return useQuery({
     queryKey: ['verifications', page],
     queryFn: () => bookingApi.getPendingVerifications(page, 20),
-    staleTime: 30 * 1000, // 30 seconds — owner wants real-time updates
+    enabled: options?.enabled ?? true,
+    staleTime: 15 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
   });
 }
+
+export function useOwnerBookings(page: number = 1, status?: string, options?: QueryOptions) {
+  return useQuery({
+    queryKey: ['owner-bookings', page, status],
+    queryFn: () => bookingApi.getOwnerBookings(page, 20, status),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+
+export function useOwnerStats(options?: QueryOptions) {
+  return useQuery({
+    queryKey: ['owner-stats'],
+    queryFn: () => bookingApi.getOwnerStats(),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+
+export function useAdminBookings(page: number = 1, status?: string, options?: QueryOptions) {
+  return useQuery({
+    queryKey: ['admin-bookings', page, status],
+    queryFn: () => bookingApi.getAdminBookings(page, 20, status),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+
+export function useAdminPendingVerifications(page: number = 1, options?: QueryOptions) {
+  return useQuery({
+    queryKey: ['admin-verifications', page],
+    queryFn: () => bookingApi.getAdminPendingVerifications(page, 20),
+    enabled: options?.enabled ?? true,
+    staleTime: 15 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
+  });
+}
+
+export function useAdminStats(options?: QueryOptions) {
+  return useQuery({
+    queryKey: ['admin-stats'],
+    queryFn: () => bookingApi.getAdminStats(),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+

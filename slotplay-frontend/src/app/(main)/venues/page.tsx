@@ -122,9 +122,9 @@ function VenuesContent() {
     setPage(1);
   };
 
-  const { data: venueData, isLoading, error } = useVenueList({
+  const { data: venueData, isLoading, error, refetch } = useVenueList({
     page,
-    limit: 12,
+    limit: 8,
     search: search || undefined,
     city: filters.city || undefined,
     sportId: filters.sportId ? Number(filters.sportId) : undefined,
@@ -285,7 +285,13 @@ function VenuesContent() {
           {/* Error */}
           {error && (
             <div className="py-20 text-center">
-              <p className="text-red-600 dark:text-red-400">Failed to load venues. Try again.</p>
+              <p className="text-red-600 dark:text-red-400 font-semibold mb-3">Failed to load venues. Try again.</p>
+              <button
+                onClick={() => refetch()}
+                className="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold shadow-sm transition-colors"
+              >
+                Retry Loading Venues
+              </button>
             </div>
           )}
 

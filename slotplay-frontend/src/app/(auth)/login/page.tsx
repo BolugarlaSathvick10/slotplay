@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,6 +26,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const returnUrl = searchParams.get('returnUrl') ?? undefined;
   const { login } = useAuth();
@@ -43,9 +44,18 @@ export default function LoginPage() {
     try {
       await login(data, returnUrl);
     } catch (err: unknown) {
+      const customErr = err as { message?: string; code?: string };
       const message =
-        err instanceof Error ? err.message : 'Login failed. Please try again.';
+        customErr?.message ||
+        (err instanceof Error ? err.message : 'Login failed. Please try again.');
       toast.error(message);
+
+      if (customErr?.code === 'EMAIL_NOT_VERIFIED') {
+        try {
+          sessionStorage.setItem('slotplay_verify_email', data.email);
+        } catch {}
+        router.push(`/verify-otp?email=${encodeURIComponent(data.email)}`);
+      }
     } finally {
       setIsLoading(false);
     }

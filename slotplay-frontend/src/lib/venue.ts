@@ -49,10 +49,17 @@ export async function getVenue(id: string) {
   return data.data;
 }
 
+export function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export async function getVenueSlots(id: string, date: Date) {
   const { data } = await api.get<ApiSuccess<SlotResponse[]>>(
     `/api/venues/${id}/slots`,
-    { params: { date: date.toISOString().split('T')[0] } }
+    { params: { date: formatDateLocal(date) } }
   );
   return data.data;
 }

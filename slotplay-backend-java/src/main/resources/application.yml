@@ -1,0 +1,80 @@
+server:
+  port: ${PORT:4000}
+  servlet:
+    context-path: /
+    session:
+      cookie:
+        name: slotplay.sid
+        http-only: true
+        secure: ${SESSION_COOKIE_SECURE:false}
+        same-site: ${SESSION_COOKIE_SAME_SITE:lax}
+        max-age: 604800s
+      timeout: 7d
+
+spring:
+  application:
+    name: slotplay-backend-java
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/slotplay}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 30000
+      max-lifetime: 60000
+      connection-timeout: 30000
+      data-source-properties:
+        stringtype: unspecified
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # NEVER use update, create, or create-drop on production tables
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    show-sql: false
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+    locations: classpath:db/migration
+
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE_MB:5}MB
+      max-request-size: 25MB
+
+# Custom application configuration
+slotplay:
+  cors:
+    allowed-origin: ${FRONTEND_URL:http://localhost:3000}
+  session:
+    cookie-name: slotplay.sid
+    max-age-ms: ${SESSION_MAX_AGE_MS:604800000} # 7 days
+    secret: ${SESSION_SECRET:default-insecure-dev-session-secret-change-in-prod-minimum-32-chars}
+  storage:
+    provider: ${STORAGE_PROVIDER:local}
+    upload-dir: ${UPLOAD_DIR:uploads}
+  mail:
+    from: ${EMAIL_FROM:${RESEND_FROM_EMAIL:SlotPlay <slotplay@nmart.me>}}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method

@@ -6,8 +6,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useBookingDetail, useCancelBooking } from '@/hooks/useBooking';
-import { Check, Clock, XCircle, MapPin, Calendar, Download, ChevronLeft } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useBookingDetail, useCancelBooking, useVerifyPayment } from '@/hooks/useBooking';
+import { Check, Clock, XCircle, MapPin, Calendar, Download, ChevronLeft, ShieldCheck } from 'lucide-react';
+import { formatTime } from '@/lib/utils';
 
 const STATUS_UI = {
   pending_payment: { label: 'Awaiting Payment', Icon: Clock, bg: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800', color: 'text-yellow-700 dark:text-yellow-400' },
@@ -17,8 +19,10 @@ const STATUS_UI = {
 } as const;
 
 export default function BookingDetailPage({ params }: { params: { id: string } }) {
+  const { user } = useAuth();
   const { data: booking, isLoading } = useBookingDetail(params.id);
   const cancel = useCancelBooking();
+  const verify = useVerifyPayment();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [qrReady, setQrReady] = useState(false);
 
@@ -106,11 +110,15 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
             <Calendar size={16} className="text-gray-400 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-gray-900 dark:text-white">
-                {new Date(slot.date || slot.startTime).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {new Date(slot.date ? slot.date + 'T00:00:00' : slot.startTime).toLocaleDateString('en-IN', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
               </p>
               <p className="text-gray-500">
-                {slot.startTime?.length <= 5 ? slot.startTime : new Date(slot.startTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} –{' '}
-                {slot.endTime?.length <= 5 ? slot.endTime : new Date(slot.endTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                {slot.startTime ? formatTime(slot.startTime) : ''}
+                {slot.endTime ? ` – ${formatTime(slot.endTime)}` : ''}
               </p>
             </div>
           </div>
@@ -141,8 +149,27 @@ export default function BookingDetailPage({ params }: { params: { id: string } }
         </div>
       )}
 
+      {/* Owner / Admin instant confirmation leverage */}
+      {(user?.roleId === 2 || user?.roleId === 3) && (booking.status === 'pending_payment' || booking.status === 'pending_verification') && (
+        <div className="p-4 bg-brand-50 dark:bg-brand-950 border border-brand-200 dark:border-brand-900 rounded-2xl mb-4 text-center">
+          <p className="text-xs font-bold text-brand-700 dark:text-brand-300 mb-2">Management Action (Owner / Admin)</p>
+          <button
+            onClick={() => {
+              if (confirm('Confirm this payment received and book the slot? A QR code ticket will be generated immediately for the user.')) {
+                verify.mutate({ bookingId: booking.id, approved: true });
+              }
+            }}
+            disabled={verify.isPending}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-bold rounded-xl shadow-md transition-colors"
+          >
+            <ShieldCheck size={18} />
+            {verify.isPending ? 'Confirming...' : 'Confirm Payment & Book Slot'}
+          </button>
+        </div>
+      )}
+
       {/* Cancel */}
-      {booking.status === 'pending_payment' && (
+      {booking.status === 'pending_payment' && !user?.roleId && (
         <button
           onClick={() => confirm('Cancel this booking?') && cancel.mutate(booking.id)}
           disabled={cancel.isPending}

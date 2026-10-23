@@ -10,6 +10,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useBookingDetail, useSubmitPayment } from '@/hooks/useBooking';
 import { Upload, Check, AlertCircle, Copy, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatTime } from '@/lib/utils';
 
 function CheckoutContent() {
   const searchParams = useSearchParams();
@@ -85,11 +86,14 @@ function CheckoutContent() {
           {venue && <p className="font-bold text-gray-900 dark:text-white">{venue.name}</p>}
           {slot && (
             <p className="text-gray-600 dark:text-gray-300">
-              {new Date(slot.date || slot.startTime).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })}
+              {new Date(slot.date ? slot.date + 'T00:00:00' : slot.startTime).toLocaleDateString('en-IN', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+              })}
               {' · '}
-              {(slot.startTime?.length <= 5 ? slot.startTime : new Date(slot.startTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))}
-              {' – '}
-              {(slot.endTime?.length <= 5 ? slot.endTime : new Date(slot.endTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }))}
+              {slot.startTime ? formatTime(slot.startTime) : ''}
+              {slot.endTime ? ` – ${formatTime(slot.endTime)}` : ''}
             </p>
           )}
           <div className="pt-2 border-t border-brand-200 dark:border-brand-800 flex justify-between">

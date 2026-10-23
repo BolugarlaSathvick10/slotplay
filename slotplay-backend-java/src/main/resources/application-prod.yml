@@ -1,0 +1,19 @@
+server:
+  servlet:
+    session:
+      cookie:
+        secure: true
+        same-site: strict
+
+spring:
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+logging:
+  level:
+    com.slotplay: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
