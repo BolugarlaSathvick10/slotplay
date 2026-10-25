@@ -33,8 +33,14 @@ function useNotifications() {
   return useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
-      const { data } = await api.get('/api/notifications?limit=20');
-      return data.data as { data: Notification[]; pagination: any };
+      const res = await api.get('/api/notifications?limit=20');
+      const payload = res.data?.data ?? res.data;
+      const items: Notification[] = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : [];
+      return { data: items, pagination: payload?.pagination };
     },
     enabled: isAuthenticated,
     refetchInterval: 60_000,
@@ -49,8 +55,12 @@ export function NotificationBell() {
   const ref = useRef<HTMLDivElement>(null);
 
   const { data } = useNotifications();
-  const notifications = data?.data ?? [];
-  const unread = notifications.filter(n => !n.isRead).length;
+  const notifications: Notification[] = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data)
+    ? data
+    : [];
+  const unread = notifications.filter(n => !(n.isRead ?? (n as any).read)).length;
 
   // Close on outside click
   useEffect(() => {
@@ -114,7 +124,7 @@ export function NotificationBell() {
                 <div
                   key={n.id}
                   className={`px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                    !n.isRead ? 'bg-brand-50/50 dark:bg-brand-900/10' : ''
+                    !(n.isRead ?? (n as any).read) ? 'bg-brand-50/50 dark:bg-brand-900/10' : ''
                   }`}
                 >
                   <div className="flex items-start gap-2.5">

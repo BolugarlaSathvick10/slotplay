@@ -214,3 +214,17 @@ export interface AdminStats {
   totalRevenue: number;
 }
 
+export interface AdminReports {
+  users: number;
+  venues: number;
+  bookings: number;
+  revenue: number;
+  confirmedBookings?: number;
+  pendingVerifications?: number;
+  pendingPayments?: number;
+  cancelledBookings?: number;
+  rejectedBookings?: number;
+  totalVenuesActive?: number;
+  totalVenuesSuspended?: number;
+}
+

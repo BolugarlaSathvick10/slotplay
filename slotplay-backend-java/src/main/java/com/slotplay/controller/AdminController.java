@@ -73,11 +73,26 @@ public class AdminController {
         long bookings = bookingRepository.count();
         BigDecimal revenue = paymentRepository.sumVerifiedRevenue();
 
+        long confirmed = bookingRepository.countByStatus("confirmed");
+        long pendingVerifications = bookingRepository.countByStatus("pending_verification");
+        long pendingPayments = bookingRepository.countByStatus("pending_payment");
+        long cancelled = bookingRepository.countByStatus("cancelled");
+        long rejected = bookingRepository.countByStatus("rejected");
+        long activeVenues = venueRepository.countByStatus("active");
+        long suspendedVenues = venueRepository.countByStatus("suspended");
+
         AdminReportsResponse response = new AdminReportsResponse(
                 users,
                 venues,
                 bookings,
-                revenue != null ? revenue : BigDecimal.ZERO
+                revenue != null ? revenue : BigDecimal.ZERO,
+                confirmed,
+                pendingVerifications,
+                pendingPayments,
+                cancelled,
+                rejected,
+                activeVenues,
+                suspendedVenues
         );
 
         return ResponseEntity.ok(ApiResponse.success(response, "Reports"));

@@ -24,6 +24,8 @@ public interface VenueRepository extends JpaRepository<Venue, UUID> {
 
     long countByOwnerId(UUID ownerId);
 
+    long countByStatus(String status);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM Venue v WHERE v.id = :id")
     Optional<Venue> findByIdForUpdate(@Param("id") UUID id);

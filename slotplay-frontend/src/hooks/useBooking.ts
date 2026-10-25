@@ -166,3 +166,13 @@ export function useAdminStats(options?: QueryOptions) {
   });
 }
 
+export function useAdminReports(options?: QueryOptions) {
+  return useQuery({
+    queryKey: ['admin-reports'],
+    queryFn: () => bookingApi.getAdminReports(),
+    enabled: options?.enabled ?? true,
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
+  });
+}
+

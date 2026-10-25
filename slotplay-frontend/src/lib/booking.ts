@@ -5,7 +5,7 @@
  */
 
 import api from './api';
-import { ApiSuccess, Booking, OwnerStats, AdminStats } from '@/types';
+import { ApiSuccess, Booking, OwnerStats, AdminStats, AdminReports } from '@/types';
 
 export interface CreateBookingPayload {
   slotId: string;
@@ -171,6 +171,11 @@ export async function getAdminPendingVerifications(page: number = 1, limit: numb
 
 export async function getAdminStats() {
   const { data } = await api.get<ApiSuccess<AdminStats>>('/api/admin/stats');
+  return data.data;
+}
+
+export async function getAdminReports() {
+  const { data } = await api.get<ApiSuccess<AdminReports>>('/api/admin/reports');
   return data.data;
 }
 

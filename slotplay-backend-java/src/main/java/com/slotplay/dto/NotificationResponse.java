@@ -1,5 +1,6 @@
 package com.slotplay.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.Instant;
 
 public class NotificationResponse {
@@ -8,6 +9,7 @@ public class NotificationResponse {
     private String type;
     private String title;
     private String body;
+    @JsonProperty("isRead")
     private boolean isRead;
     private Instant createdAt;
 
@@ -55,10 +57,12 @@ public class NotificationResponse {
         this.body = body;
     }
 
+    @JsonProperty("isRead")
     public boolean isRead() {
         return isRead;
     }
 
+    @JsonProperty("isRead")
     public void setRead(boolean read) {
         isRead = read;
     }

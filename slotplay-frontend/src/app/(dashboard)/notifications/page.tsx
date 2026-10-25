@@ -34,14 +34,47 @@ function relativeTime(iso: string) {
   return `${d}d ago`;
 }
 
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  isRead?: boolean;
+  read?: boolean;
+  createdAt: string;
+}
+
+interface NotificationPageData {
+  data: NotificationItem[];
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
 function useNotifs(page: number, type: NotifType) {
   return useQuery({
     queryKey: ['notifs-center', page, type],
-    queryFn: async () => {
+    queryFn: async (): Promise<NotificationPageData> => {
       const params: any = { page, limit: 20 };
       if (type !== 'all') params.type = type;
-      const { data } = await api.get('/api/notifications', { params });
-      return data as { success: boolean; data: any[]; page: number; total: number; pages: number };
+      const res = await api.get('/api/notifications', { params });
+      const payload = res.data?.data ?? res.data;
+      const items: NotificationItem[] = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : [];
+      const totalPages = payload?.pages ?? payload?.pagination?.pages ?? (items.length > 0 ? 1 : 0);
+      const totalCount = payload?.total ?? payload?.pagination?.total ?? items.length;
+
+      return {
+        data: items,
+        page: payload?.page ?? page,
+        limit: payload?.limit ?? 20,
+        total: totalCount,
+        pages: totalPages,
+      };
     },
     refetchInterval: 30_000,
   });
@@ -70,7 +103,7 @@ export default function NotificationCenterPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['notifs-center'] }); qc.invalidateQueries({ queryKey: ['notifications'] }); },
   });
 
-  const unread = notifs.filter(n => !n.isRead).length;
+  const unread = notifs.filter(n => !(n.isRead ?? n.read)).length;
 
   const TABS: { label: string; value: NotifType }[] = [
     { label: 'All', value: 'all' },
@@ -135,11 +168,12 @@ export default function NotificationCenterPage() {
           {notifs.map((n: any) => {
             const cfg = TYPE_CONFIG[n.type as keyof typeof TYPE_CONFIG] ?? TYPE_CONFIG.default;
             const Icon = cfg.icon;
+            const isRead = Boolean(n.isRead ?? n.read);
             return (
               <div
                 key={n.id}
                 className={`flex items-start gap-3 px-5 py-4 transition-colors ${
-                  !n.isRead ? 'bg-brand-50/40 dark:bg-brand-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                  !isRead ? 'bg-brand-50/40 dark:bg-brand-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                 }`}
               >
                 {/* Icon */}
@@ -150,8 +184,8 @@ export default function NotificationCenterPage() {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    {!n.isRead && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />}
-                    <p className={`text-sm font-semibold ${!n.isRead ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                    {!isRead && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />}
+                    <p className={`text-sm font-semibold ${!isRead ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
                       {n.title}
                     </p>
                   </div>
@@ -161,7 +195,7 @@ export default function NotificationCenterPage() {
 
                 {/* Actions */}
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  {!n.isRead && (
+                  {!isRead && (
                     <button
                       onClick={() => markOne.mutate(n.id)}
                       title="Mark as read"
