@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: slotplay-backend
+    runtime: docker
+    dockerfilePath: slotplay-backend-java/Dockerfile
+    dockerContext: slotplay-backend-java
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 4000
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USERNAME
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        value: SlotPlay <slotplay@nmart.me>
+      - key: STORAGE_PROVIDER
+        value: local
+
