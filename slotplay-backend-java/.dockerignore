@@ -1,0 +1,12 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.env
+*.env.*
+.env
+.git
+.gitignore
+.idea
+*.iml
+test-uploads/
+uploads/
+
